@@ -50,7 +50,7 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
 
 Đây là thay đổi giao thức trước rollout: APK và backend phải được nâng đồng bộ. Không tự viết lại ID của outbox cũ hoặc Sheet cũ; các bản ghi pending dùng ID 16 ký tự sẽ bị chặn `EVENT_ID_MISMATCH`, vẫn giữ payload cục bộ. Nếu đã thử bản nền cũ, cần xử lý/đối soát hết hàng đợi với backend cũ trước khi nâng. Không phát lại dữ liệu đã ghi dưới thuật toán cũ sang thuật toán mới.
 
-Backend che identifier có từ 8 chữ số, liền nhau hoặc ngăn bằng space/NBSP/dấu `-`, trước khi ghi `Raw_Capture.raw_text`, `Transactions.description` và `counterparty`. Các giá trị có đơn vị tiền, token ngày/giờ và cột amount/balance/event_id được giữ nguyên. Đây là quy tắc xác định cho format MVP, không phải bộ nhận diện mọi dữ liệu cá nhân.
+Backend che identifier có từ 8 chữ số, liền nhau hoặc ngăn bằng space/NBSP hoặc dấu `-`, `.`, `,`, `/`, `_`, trước khi ghi `Raw_Capture.raw_text`, `Transactions.description` và `counterparty`. Các giá trị có đơn vị tiền, token ngày/giờ và cột amount/balance/event_id được giữ nguyên. Đây là quy tắc xác định cho format MVP, không phải bộ nhận diện mọi dữ liệu cá nhân.
 
 Dedup đọc toàn bộ cột ID của cả hai tab; không còn cửa sổ 1.000 dòng. Đọc và append vẫn là hai thao tác: request đồng thời có thể ghi trùng. Mutex Android tuần tự hóa upload trong một tiến trình, không thay thế khóa nguyên tử phía Sheets.
 

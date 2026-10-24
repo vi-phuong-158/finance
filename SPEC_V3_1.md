@@ -231,7 +231,7 @@ Quy trình xử lý tại `api/transaction.ts` và `api/transaction-service.ts`:
 
    * **Trường hợp 1 — Parse thành công:** Gán danh mục qua `categories.ts`, dùng `RAW` để append 9 cột và trả `SAVED_TRANSACTION`.
 
-   * **Trường hợp 2 — Parser chưa hiểu format:** `maskSensitiveIdentifiers` che chuỗi từ 8 chữ số, liền nhau hoặc có space/NBSP/dấu `-`; bảo toàn token tiền có đơn vị và ngày/giờ. Dùng `RAW` append 4 cột và trả `SAVED_RAW_CAPTURE`. Cùng hàm che được áp dụng cho description/counterparty trước mọi lần ghi Transactions; amount/balance và event_id không qua masking.
+   * **Trường hợp 2 — Parser chưa hiểu format:** `maskSensitiveIdentifiers` che chuỗi từ 8 chữ số, liền nhau hoặc có space/NBSP hoặc dấu `-`, `.`, `,`, `/`, `_`; bảo toàn token tiền có đơn vị và ngày/giờ. Dùng `RAW` append 4 cột và trả `SAVED_RAW_CAPTURE`. Cùng hàm che được áp dụng cho description/counterparty trước mọi lần ghi Transactions; amount/balance và event_id không qua masking.
 
 ### 5.2. Đặc tả Parser Đầu tiên: `parsers/vcb.ts`
 

@@ -16,6 +16,12 @@ test('masks identifiers separated by hyphens', () => {
   assert.equal(maskSensitiveIdentifiers('TK 9999-999-999'), 'TK ***');
 });
 
+test('masks other common financial identifier separators', () => {
+  for (const identifier of ['9999.999.999', '9999/999/999', '9999_999_999']) {
+    assert.equal(maskSensitiveIdentifiers(`TK ${identifier}`), 'TK ***');
+  }
+});
+
 test('masks card-length identifiers and multiple identifiers', () => {
   assert.equal(maskSensitiveIdentifiers('9999 9999 9999 9999 -> 8888-888-888'), '*** -> ***');
 });
