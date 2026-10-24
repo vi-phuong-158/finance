@@ -11,6 +11,8 @@ Hướng dẫn cài đặt/pilot theo 12 bước: [VCB Production E2E](docs/VCB_
 
 Backend có `GET /api/health` (chỉ kiểm tra cấu hình cục bộ), `npm run sheets:bootstrap` (xem kế hoạch; thêm `-- --apply` để tạo tab/header còn thiếu) và `npm run check:deployment` (health + dry-run không ghi giao dịch). Hai lệnh đọc cấu hình riêng từ `vercel/.env.local`.
 
+Không có JDK/SDK local: workflow thủ công build APK pilot và các gate phân phối private ở [biên bản acceptance](docs/VCB_PRODUCTION_E2E_ACCEPTANCE.md). Repo public không được xuất artifact APK chứa secret. Cài APK không bắt buộc ADB; checklist ngắn ở `MANUAL_DEVICE_ACCEPTANCE` trong biên bản.
+
 ## Google Sheets
 
 Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `SPREADSHEET_ID` trong Vercel. Không đưa ID thật, secret hoặc khóa service account vào repository.
