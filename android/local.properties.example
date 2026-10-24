@@ -1,0 +1,4 @@
+# Copy file này thành local.properties và điền URL Vercel + Secret của bạn:
+WEBHOOK_URL=https://your-project.vercel.app/api/transaction
+WEBHOOK_SECRET=replace-with-the-same-private-secret-used-by-vercel
+
