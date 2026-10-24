@@ -68,7 +68,7 @@ Bootstrap cần khoảng thời gian không có cộng tác viên sửa schema. 
 1. Import repo `vi-phuong-158/finance`, dùng branch đã được người duyệt chấp thuận. Agent không tự merge PR này.
 2. Chọn **Root Directory = `vercel`**, **Framework Preset = Other**, Node **24.x**, Install Command **`npm ci`**. Không đặt build/output của frontend; dự án chỉ có hai Node API.
 3. Trong **Settings → Environment Variables**, thêm bốn tên ở bước 3 cho Production. Chép giá trị, không chép dấu nháy bao ngoài của `.env.local`. Chọn Secret/Sensitive cho secret/private key nếu giao diện hỗ trợ.
-4. Preview dùng Sheet/secret thử riêng. Sau mỗi lần sửa env, redeploy để cấu hình có hiệu lực.
+4. Preview dùng Sheet/secret thử riêng. Project đang tạm đặt Ignored Build Step = `exit 0` để không tự build khi thiếu credential. Chỉ khi env/Sheet sẵn sàng, đổi về Automatic rồi deploy commit `main` đã duyệt. Sau mỗi lần sửa env, redeploy để cấu hình có hiệu lực.
 5. Deploy và lấy domain HTTPS ổn định. URL webhook phải là `https://DOMAIN_CUA_BAN/api/transaction`, không có user/password, query hay fragment.
 
 Điện thoại phải gọi được endpoint trực tiếp. Trang đăng nhập Vercel/Deployment Protection không phải phản hồi API. Chỉ cho phép truy cập production endpoint chủ định, vẫn giữ `X-Webhook-Secret`; không tắt bảo vệ các preview không liên quan. Không cần cài CLI Vercel để làm các bước này.

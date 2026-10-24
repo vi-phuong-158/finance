@@ -10,7 +10,9 @@ PR #3 remains **Draft**. No production deployment or real-device acceptance is c
 
 ## Vercel project
 
-Created `finance` in team `vi-phuong-158s-projects`, ID `prj_jSMQ6jeW8GKEVOPDeeerI9ZKOiVj`. Dashboard verification confirms Git repository `vi-phuong-158/finance`, production branch `main`, Root Directory `vercel`, Framework Other, Node `24.x`, Install Command `npm ci`, empty Build Command and no frontend Output Directory override. Vercel assigned domain `finance-rust-nine-16.vercel.app`; this is not evidence of a deployed/healthy production API. No production deployment exists yet.
+Created `finance` in team `vi-phuong-158s-projects`, ID `prj_jSMQ6jeW8GKEVOPDeeerI9ZKOiVj`. Dashboard verification confirms Git repository `vi-phuong-158/finance`, production branch `main`, Root Directory `vercel`, Framework Other, Node `24.x`, Install Command `npm ci`, empty Build Command and no frontend Output Directory override. Vercel assigned domain `finance-rust-nine-16.vercel.app`; this is not evidence of a deployed/healthy production API. No ready production deployment exists.
+
+Git integration automatically started first deployment `dpl_BF2hwiVARyosCj4vwdC3Nc5dzprK` from acceptance commit `e182b22bdfea346ba7d38a3f94555e0e74669fee`, with target production despite `main` branch tracking. It was canceled while BUILDING; the API confirmed **CANCELED**. No successful deployment/health result is claimed. **Ignored Build Step is temporarily `exit 0`** to skip further Git builds until credentials/Sheet are ready. Restore its default/Automatic setting only at that point, then explicitly deploy the reviewed `main` commit. Do not promote the canceled acceptance deployment.
 
 ## Production environment and Google Sheets
 
@@ -65,7 +67,7 @@ Configure only these environment secrets through GitHub Settings:
 A configured build is blocked by two independent conditions:
 
 1. **Repo is public.** Other GitHub users with read access can download its Actions artifacts. APK contains the webhook secret, so admission fails before the secret-bearing job on public repos and privacy is checked again before upload. Retention/Environment protection does not make artifacts private. Owner authorization is needed for an appropriate private repository/distribution arrangement; verify the GitHub plan supports private Environment secrets. No repository visibility change or new repository was made.
-2. **New workflow is only on Draft PR #3.** GitHub requires a dispatch workflow on the default branch before manual runs. No merge/default-branch change was made to bypass that requirement. A successful configured workflow run remains an open gate.
+2. **New workflow is only on Draft PR #3.** GitHub requires a dispatch workflow on the default branch before manual runs. Dispatch was attempted after push and returned **HTTP 404: workflow not found on the default branch**. No merge/default-branch change was made to bypass that requirement. A successful configured workflow run remains an open gate.
 
 Configured Gradle output, including diagnostics that may quote generated BuildConfig, goes to a temporary runner file and is never printed/uploaded. No private Gradle cache is saved. Only the APK is uploaded; generated output/logs are cleaned. No release, PR attachment or APK commit. Actions are pinned to inspected upstream SHAs and checkout does not retain a write credential.
 
@@ -107,6 +109,6 @@ Hoàn tất [checklist chi tiết](VCB_DEVICE_CHECKLIST.md) trong bản riêng. 
 
 ## Next action and verdict boundary
 
-Owner supplies the four production values securely and resolves private APK distribution/default-branch workflow availability. Then bootstrap, deploy `main`, verify health/dry-run, build/download/install APK, and perform real CHI/THU/offline/reboot checks. Do not change installation with pending events.
+Owner supplies the four production values securely and resolves private APK distribution/default-branch workflow availability. Then bootstrap, restore the temporary Ignored Build Step to Automatic, deploy `main`, verify health/dry-run, build/download/install APK, and perform real CHI/THU/offline/reboot checks. Do not change installation with pending events.
 
 Only use `VCB_PRODUCTION_E2E_PASS` after real evidence covers every mandatory pipeline/device gate. Credentials and separate APK blockers remain; this run is not ready for device acceptance.
