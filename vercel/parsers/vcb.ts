@@ -12,12 +12,12 @@ export interface ParsedTransaction {
   category: string;
 }
 
-function parsePositiveVnd(signedAmount: string): { type: 'THU' | 'CHI'; amount: number } | null {
-  if (!/^[+-]?(?:\d+|\d{1,3}(?:[,.]\d{3})+)$/.test(signedAmount)) return null;
+function parsePositiveVnd(signedAmount: string, allowZero = false): { type: 'THU' | 'CHI'; amount: number } | null {
+  if (!/^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+|\d{1,3}(?:\.\d{3})+)$/.test(signedAmount)) return null;
 
   const digits = signedAmount.replace(/[+,.\s-]/g, '');
   const amount = Number(digits);
-  if (!Number.isSafeInteger(amount) || amount <= 0) return null;
+  if (!Number.isSafeInteger(amount) || amount < 0 || (!allowZero && amount === 0)) return null;
 
   return { type: signedAmount.startsWith('-') ? 'CHI' : 'THU', amount };
 }
@@ -45,11 +45,12 @@ function isValidDateTime(value: string): boolean {
 
 export function parseVcb(rawText: string): ParsedTransaction | null {
   const normalized = rawText.normalize('NFC').replace(/\s+/g, ' ').trim();
+  if ((normalized.match(/Số dư TK/gi) ?? []).length !== 1) return null;
 
   // Mẫu giả lập đã ẩn danh:
   // "Số dư TK VCB ACCOUNT-TEST -10,000 VND lúc 01-01-2026 12:00:00. Số dư 50,000 VND. Ref MBVCB.TESTREF.TEST SUPERMARKET"
   const mainMatch = normalized.match(
-    /Số dư TK(?:\s+VCB)?\s+\S+\s+([+-][\d,.]+)\s*VND\s+lúc\s+(\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}(?::\d{2})?)/i
+    /^Số dư TK(?:\s+VCB)?\s+\S+\s+([+-][\d,.]+)\s*VND\s+lúc\s+(\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}(?::\d{2})?)(?=\s|\.|$)/i
   );
   if (!mainMatch) return null;
 
@@ -63,7 +64,7 @@ export function parseVcb(rawText: string): ParsedTransaction | null {
   const time = rawTime.replace(/-/g, '/').slice(0, 16); // DD/MM/YYYY HH:mm
 
   const balanceMatch = normalized.match(/Số dư\s+([\d,.]+)\s*VND/i);
-  const parsedBalance = balanceMatch ? parsePositiveVnd(balanceMatch[1]) : null;
+  const parsedBalance = balanceMatch ? parsePositiveVnd(balanceMatch[1], true) : null;
   const balance = parsedBalance?.amount ?? '';
 
   const refMatch = normalized.match(/\bRef\s+(.*)$/i);

@@ -13,8 +13,16 @@ val localProps = Properties().apply {
     }
 }
 
-val webhookUrl = localProps.getProperty("WEBHOOK_URL").orEmpty()
-val webhookSecret = localProps.getProperty("WEBHOOK_SECRET").orEmpty()
+val webhookUrl = providers.environmentVariable("WEBHOOK_URL").orNull ?: localProps.getProperty("WEBHOOK_URL").orEmpty()
+val webhookSecret = providers.environmentVariable("WEBHOOK_SECRET").orNull ?: localProps.getProperty("WEBHOOK_SECRET").orEmpty()
+fun javaLiteral(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n") + "\""
+fun validWebhookConfiguration(endpoint: String, secret: String): Boolean {
+    val uri = runCatching { URI(endpoint) }.getOrNull() ?: return false
+    return uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.rawUserInfo == null
+        && uri.rawQuery == null && uri.rawFragment == null && uri.path == "/api/transaction"
+        && Regex("[A-Za-z0-9_-]{32,128}").matches(secret)
+        && !Regex("replace|placeholder|change-?me|default|your[-_]|example|test[-_]|sample|mat-khau", RegexOption.IGNORE_CASE).containsMatchIn(secret)
+}
 
 android {
     namespace = "vn.phuong.financebridge"
@@ -27,8 +35,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        buildConfigField("String", "WEBHOOK_URL", "\"$webhookUrl\"")
-        buildConfigField("String", "WEBHOOK_SECRET", "\"$webhookSecret\"")
+        buildConfigField("String", "WEBHOOK_URL", javaLiteral(webhookUrl))
+        buildConfigField("String", "WEBHOOK_SECRET", javaLiteral(webhookSecret))
     }
 
     buildTypes {
@@ -72,13 +80,21 @@ android.sourceSets.getByName("test").resources.srcDir("../../shared")
 
 val validateReleaseWebhookConfig = tasks.register("validateReleaseWebhookConfig") {
     doLast {
-        val endpoint = runCatching { URI(webhookUrl) }.getOrNull()
-        if (endpoint?.scheme != "https" || endpoint.host.isNullOrBlank()) {
-            throw GradleException("Release builds require WEBHOOK_URL to use HTTPS and include a host.")
+        if (!validWebhookConfiguration(webhookUrl, webhookSecret)) {
+            throw GradleException("Release builds require a private HTTPS /api/transaction endpoint and a non-placeholder URL-safe secret of 32-128 characters.")
         }
-        if (webhookSecret.isBlank() || webhookSecret.contains("replace-with", ignoreCase = true)) {
-            throw GradleException("Release builds require a privately configured WEBHOOK_SECRET.")
-        }
+    }
+}
+
+tasks.register("verifyWebhookConfigurationPolicy") {
+    doLast {
+        val endpoint = "https://finance.example.invalid/api/transaction"
+        val syntheticSecret = "a".repeat(64)
+        check(validWebhookConfiguration(endpoint, syntheticSecret))
+        listOf("" to syntheticSecret, endpoint.replace("https", "http") to syntheticSecret,
+            endpoint to "", endpoint to "default".repeat(8), endpoint to "placeholder".repeat(5),
+            "$endpoint?secret=x" to syntheticSecret).forEach { (url, secret) -> check(!validWebhookConfiguration(url, secret)) }
+        println("Webhook build policy: 7 checks passed")
     }
 }
 

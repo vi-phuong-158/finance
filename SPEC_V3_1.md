@@ -1,5 +1,7 @@
 # Finance Bridge V3.1 — Đặc tả triển khai và nghiệm thu
 
+> Bổ sung readiness PR #2: mã nghiệp vụ tại `vercel/lib/transaction-service.ts`; `api` chỉ chứa transaction và health. Mọi lần ghi đều kiểm tra header hai tab; schema sai trả SHEET_SCHEMA_MISMATCH, quyền/ID sai trả mã cấu hình có thể khôi phục. Health chỉ xác minh cấu hình cục bộ, không gọi Sheets. Bootstrap qua `npm run sheets:bootstrap` mặc định read-only; `-- --apply` chỉ tạo tab/header trên bảng trống sau khi preflight toàn bộ target. Quy trình triển khai và nghiệm thu thực tế ở [VCB_PRODUCTION_E2E.md](docs/VCB_PRODUCTION_E2E.md).
+
 **Hệ thống Quản lý Thu Chi Cá nhân Tự động: Android APK Forwarder ➔ Vercel Serverless ➔ Google Sheets ➔ ChatGPT / Gemini**
 
 ## 1. Mục tiêu & Phạm vi
@@ -76,7 +78,7 @@ Android (Module :app)
 
 Vercel
 ├── api/transaction.ts            # Adapter Google Sheets
-├── api/transaction-service.ts    # Kiểm tra input, bảo mật, chống trùng và ghi giao dịch
+├── lib/transaction-service.ts    # Kiểm tra input, bảo mật, chống trùng và ghi giao dịch
 ├── parsers/
 │   ├── vcb.ts                    # Bóc tách thông báo Vietcombank (Chạy chính thức ngay từ đầu)
 │   ├── vietinbank.ts             # Bóc tách VietinBank (Triển khai sau khi có mẫu thật ở Raw_Capture)
@@ -207,7 +209,7 @@ Payload JSON nhận từ Android APK:
 
 ```
 
-Quy trình xử lý tại `api/transaction.ts` và `api/transaction-service.ts`:
+Quy trình xử lý tại `api/transaction.ts` và `lib/transaction-service.ts`:
 
 1. **Kiểm tra cấu hình và Secret:** Thiếu cấu hình server trả 503; secret sai trả về `401 Unauthorized`.
 

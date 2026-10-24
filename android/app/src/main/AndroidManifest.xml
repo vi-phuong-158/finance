@@ -6,6 +6,7 @@
 
     <application
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
         android:fullBackupOnly="false"
         android:label="Đồng Bộ Thu Chi"
         android:supportsRtl="true"

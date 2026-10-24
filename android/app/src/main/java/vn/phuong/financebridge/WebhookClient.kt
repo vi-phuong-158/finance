@@ -1,6 +1,5 @@
 package vn.phuong.financebridge
 
-import android.net.Uri
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,6 +15,8 @@ data class WebhookResponse(
 
 object WebhookClient {
     private val httpClient = OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
@@ -24,9 +25,7 @@ object WebhookClient {
     fun post(payload: JSONObject): WebhookResponse {
         val endpoint = BuildConfig.WEBHOOK_URL
         val secret = BuildConfig.WEBHOOK_SECRET
-        val uri = Uri.parse(endpoint)
-
-        if (uri.scheme != "https" || uri.host.isNullOrBlank() || secret.isBlank()) {
+        if (!WebhookConfiguration.isValid(endpoint, secret)) {
             return WebhookResponse(0, null, "CLIENT_CONFIGURATION_ERROR")
         }
 
@@ -49,12 +48,13 @@ object WebhookClient {
         response.httpCode == 408
             || response.httpCode == 425
             || response.httpCode == 429
-            || (response.httpCode in 500..599 && response.errorCode != "SERVER_CONFIGURATION_ERROR" && response.errorCode != "SHEET_SCHEMA_MISMATCH")
+            || (response.httpCode in 500..599 && response.errorCode !in CONFIGURATION_ERRORS)
 
     fun message(response: WebhookResponse): String = when (response.errorCode ?: response.status) {
         "CLIENT_CONFIGURATION_ERROR", "SERVER_CONFIGURATION_ERROR" -> "Kiểm tra cấu hình webhook và secret"
         "UNAUTHORIZED" -> "Secret chưa khớp; sửa cấu hình rồi gửi lại"
         "SHEET_SCHEMA_MISMATCH" -> "Cấu trúc hai tab Google Sheets chưa khớp"
+        "SHEETS_PERMISSION_DENIED", "SHEET_NOT_FOUND" -> "Kiểm tra ID bảng tính và quyền Editor của service account"
         "UPSTREAM_UNAVAILABLE" -> "Máy chủ hoặc Google Sheets đang tạm thời lỗi"
         "SAVED_TRANSACTION" -> "Đã lưu giao dịch"
         "SAVED_RAW_CAPTURE" -> "Đã lưu mẫu chờ xử lý"
@@ -78,6 +78,7 @@ object WebhookClient {
     }
 
     private val ERROR_CODE = Regex("[A-Z0-9_]{1,48}")
+    private val CONFIGURATION_ERRORS = setOf("SERVER_CONFIGURATION_ERROR", "SHEET_SCHEMA_MISMATCH", "SHEETS_PERMISSION_DENIED", "SHEET_NOT_FOUND")
     private val TERMINAL_STATUSES = setOf(
         "SAVED_TRANSACTION",
         "SAVED_RAW_CAPTURE",

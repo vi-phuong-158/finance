@@ -5,6 +5,10 @@ import { matchCategory } from '../categories.js';
 import { parseBidv } from '../parsers/bidv.js';
 import { parseVcb } from '../parsers/vcb.js';
 import { parseVietinbank } from '../parsers/vietinbank.js';
+import { timingSafeEqual } from 'node:crypto';
+import { configurationIsValid, readGoogleConfiguration } from './configuration.js';
+import { hasExpectedHeaders, TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
+export { TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
 
 export type Bank = 'VCB' | 'VIETINBANK' | 'BIDV';
 type RequestLike = {
@@ -24,9 +28,6 @@ export type TransactionResult = {
   httpStatus: number;
   body: Record<string, string>;
 };
-
-export const TRANSACTION_HEADERS = ['time', 'bank', 'type', 'amount', 'balance', 'counterparty', 'description', 'category', 'event_id'];
-export const RAW_CAPTURE_HEADERS = ['time', 'bank', 'raw_text', 'event_id'];
 
 const BANK_PACKAGES: Record<Bank, string> = {
   VCB: 'com.VCB',
@@ -66,14 +67,6 @@ function formatReceivedTime(postedAt: number): string {
   }).format(new Date(postedAt)).replace(',', '');
 }
 
-function configurationIsValid(env: Environment): boolean {
-  return Boolean(env.WEBHOOK_SECRET && env.SPREADSHEET_ID && env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY);
-}
-
-function hasExpectedHeaders(actual: unknown[], expected: string[]): boolean {
-  return expected.every((header, index) => actual[index] === header);
-}
-
 export function validateAndProcessTransaction(request: RequestLike, env: Environment, makeSheetsPort: SheetsPortFactory): Promise<TransactionResult> {
   return validateAndProcessTransactionInternal(request, env, makeSheetsPort);
 }
@@ -87,7 +80,9 @@ async function validateAndProcessTransactionInternal(
   if (!configurationIsValid(env)) return { httpStatus: 503, body: { error: 'SERVER_CONFIGURATION_ERROR' } };
 
   const suppliedSecret = stringHeader(request.headers?.['x-webhook-secret']);
-  if (!suppliedSecret || suppliedSecret !== env.WEBHOOK_SECRET) {
+  const suppliedBytes = Buffer.from(suppliedSecret);
+  const expectedBytes = Buffer.from(env.WEBHOOK_SECRET!);
+  if (suppliedBytes.length !== expectedBytes.length || !timingSafeEqual(suppliedBytes, expectedBytes)) {
     return { httpStatus: 401, body: { error: 'UNAUTHORIZED' } };
   }
 
@@ -145,22 +140,18 @@ async function validateAndProcessTransactionInternal(
 
   let sheets: SheetsPort;
   try {
-    sheets = await makeSheetsPort({
-      spreadsheetId: env.SPREADSHEET_ID!,
-      clientEmail: env.GOOGLE_CLIENT_EMAIL!,
-      privateKey: env.GOOGLE_PRIVATE_KEY!,
-    });
+    sheets = await makeSheetsPort(readGoogleConfiguration(env)!);
   } catch {
     return { httpStatus: 503, body: { error: 'UPSTREAM_UNAVAILABLE' } };
   }
 
   try {
-    if (dryRun) {
-      const headers = await sheets.readHeaders();
-      if (!hasExpectedHeaders(headers.transaction, TRANSACTION_HEADERS) || !hasExpectedHeaders(headers.raw, RAW_CAPTURE_HEADERS)) {
-        return { httpStatus: 503, body: { error: 'SHEET_SCHEMA_MISMATCH' } };
-      }
+    const headers = await sheets.readHeaders();
+    if (!hasExpectedHeaders(headers.transaction, TRANSACTION_HEADERS) || !hasExpectedHeaders(headers.raw, RAW_CAPTURE_HEADERS)) {
+      return { httpStatus: 503, body: { error: 'SHEET_SCHEMA_MISMATCH' } };
+    }
 
+    if (dryRun) {
       return {
         httpStatus: 200,
         body: { status: parsed ? 'VALIDATED_TRANSACTION' : 'VALIDATED_RAW_CAPTURE', eventId },
@@ -192,7 +183,10 @@ async function validateAndProcessTransactionInternal(
     const safeText = maskSensitiveIdentifiers(normalizedText);
     await sheets.appendRaw([formatReceivedTime(postedAt), bank, safeText, eventId]);
     return { httpStatus: 200, body: { status: 'SAVED_RAW_CAPTURE', eventId } };
-  } catch {
+  } catch (error) {
+    const code = (error as { response?: { status?: number } })?.response?.status;
+    if (code === 401 || code === 403) return { httpStatus: 503, body: { error: 'SHEETS_PERMISSION_DENIED' } };
+    if (code === 404) return { httpStatus: 503, body: { error: 'SHEET_NOT_FOUND' } };
     return { httpStatus: 503, body: { error: 'UPSTREAM_UNAVAILABLE' } };
   }
 }
