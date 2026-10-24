@@ -91,33 +91,44 @@ npm run check:deployment
 
 Mong đợi `health: READY`, `dryRun: VALIDATED_TRANSACTION`, `writes: 0`. Công cụ gửi mẫu giả có `dryRun:true`, không ghi dòng giao dịch. Không tự nhập eventId hoặc sửa source. Nếu lỗi, kiểm tra env, domain, Deployment Protection, header và quyền Editor. Chưa dry-run đạt thì chưa thử giao dịch thật.
 
-## Bước 6 — Build APK có cấu hình
+## Bước 6 — Build APK an toàn (không chứa secret)
 
-Pilot đầu có thể dùng **debug APK đã cấu hình**. Debug CI để trống URL/secret và không thể tự gửi webhook.
-
-Sao chép `android/local.properties.example` thành `android/local.properties`, điền URL và **cùng secret** phía Vercel. Giữ dòng `sdk.dir` nếu Android Studio đã tạo. Đây là file cấu hình, không sửa Kotlin. Cũng có thể dùng hai biến môi trường cùng tên; env ưu tiên hơn file. Không truyền secret qua tham số dòng lệnh/log CI.
+APK phiên bản mới là **Public Safe APK**: hoàn toàn **không nhúng `WEBHOOK_SECRET`**.
+URL webhook mặc định trỏ tới production backend:
+`https://finance-rust-nine-16.vercel.app/api/transaction`
 
 Trong thư mục `android`:
 
 ```bash
-./gradlew --no-daemon assembleDebug testDebugUnitTest
+./gradlew --no-daemon assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy
 ```
 
-Windows dùng `gradlew.bat --no-daemon assembleDebug testDebugUnitTest`. APK ở `android/app/build/outputs/apk/debug/app-debug.apk`. Không commit/chia sẻ công khai: APK cá nhân có secret có thể trích xuất.
-
-Để tạo **release**, dùng Android Studio → **Build → Generate Signed App Bundle / APK → APK**, chọn app/release và keystore riêng ngoài repo. Giữ keystore/mật khẩu an toàn. Build release bị chặn nếu cấu hình thiếu, URL dùng HTTP hoặc secret mặc định/placeholder. `assembleRelease` riêng có thể tạo APK **unsigned**, phải ký trước khi cài. Không thêm cấu hình ký/keystore vào Git.
+Windows dùng `gradlew.bat --no-daemon assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy`.
+APK ở `android/app/build/outputs/apk/debug/app-debug.apk`.
+Do không chứa secret, artifact APK có thể build và phân phối an toàn từ public repo hoặc qua GitHub Actions workflow dispatch `build-pilot-apk.yml`.
 
 ## Bước 7 — Cài APK
 
-Chuyển APK qua USB, cho phép cài từ nguồn đã chọn, mở **Đồng Bộ Thu Chi**. Nếu có ADB, dùng `adb install -r <duong-dan-APK>`.
+Chuyển APK qua điện thoại (USB hoặc tải artifact `finance-bridge-vcb-pilot-apk`), cài đặt ứng dụng **Đồng Bộ Thu Chi**.
+Không yêu cầu chỉnh file trên điện thoại, không yêu cầu ADB.
 
-Khi sửa URL/secret nhúng trong APK, build/cài **bản cập nhật cùng applicationId và chữ ký**. Không gỡ app/“Clear data”: sẽ xóa outbox chưa gửi. Debug APK thường cần cùng debug keystore trên máy đã build; giữ keystore đó cho các lần pilot. Không gỡ app để vượt lỗi chữ ký khi còn giao dịch chờ.
+## Bước 8 — Cấu hình kết nối và cấp quyền (UX 4 bước)
 
-## Bước 8 — Cấp quyền
+### Bước 8.1 — Mở app và nhập mã kết nối
+Mở app, phần **Cấu hình kết nối** hiển thị máy chủ backend.
+Nhập **Mã kết nối** (giá trị bí mật tương ứng với `WEBHOOK_SECRET` đã cấu hình trên Vercel).
+Mã được ẩn dưới dạng password và mã hóa lưu bằng **Android Keystore (AES/GCM)**, không lưu plaintext trong SharedPreferences hay SQLite.
 
-Trong app, bật **Quyền đọc thông báo** và **Pin không hạn chế**. Với một số APK cài ngoài, vào thông tin app → menu ba chấm → **Allow restricted settings**, rồi cấp Notification Access. Tên mục khác nhau theo Android/hãng máy. Kiểm tra VCB cũng được phép hiển thị notification.
+### Bước 8.2 — Lưu và kiểm tra
+Nhấn **Lưu và kiểm tra** (hoặc **Lưu cấu hình** rồi **Kiểm tra kết nối**).
+App sẽ gửi dry-run kiểm tra xác thực với backend Vercel:
+- Nếu thành công, app hiển thị: **Kết nối thành công**.
+- Nếu secret sai hoặc server lỗi: app hiển thị mã lỗi (ví dụ `UNAUTHORIZED`) và giữ an toàn trạng thái.
 
-Nhấn **Kiểm tra kết nối** trong app. Phải báo kiểm tra giao dịch thành công, chưa ghi dữ liệu. Số dòng Sheet không tăng do dry-run.
+### Bước 8.3 — Cấp quyền hệ thống
+Sau khi kết nối thành công:
+- Bật **Quyền đọc thông báo** (Notification Access).
+- Bật **Pin không hạn chế** (Ignore battery optimizations).
 
 ## Bước 9 — Tạo giao dịch VCB nhỏ
 
@@ -141,8 +152,8 @@ Lỗi cố định phải chuyển BLOCKED và giữ payload, không retry vô h
 
 | Lỗi | Khôi phục |
 | --- | --- |
-| URL/secret trong APK sai | Sửa cấu hình riêng, build/cài cập nhật cùng chữ ký, không gỡ app |
-| Secret server sai / server thiếu env | Sửa env Vercel, redeploy, bảo đảm khớp APK |
+| Mã kết nối trong app sai | Nhập lại mã kết nối trong UI, nhấn Lưu và kiểm tra, sau đó nhấn **Gửi lại giao dịch lỗi** |
+| Secret server sai / server thiếu env | Sửa env Vercel, redeploy, bảo đảm khớp app |
 | SHEET_SCHEMA_MISMATCH | Dừng ghi, đối chiếu schema/backup riêng; bootstrap không tự sửa bảng có dữ liệu |
 | SHEETS_PERMISSION_DENIED / SHEET_NOT_FOUND | Kiểm tra ID và quyền Editor; redeploy nếu đổi env |
 

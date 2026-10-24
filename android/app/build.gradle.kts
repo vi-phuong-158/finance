@@ -13,15 +13,17 @@ val localProps = Properties().apply {
     }
 }
 
-val webhookUrl = providers.environmentVariable("WEBHOOK_URL").orNull ?: localProps.getProperty("WEBHOOK_URL").orEmpty()
-val webhookSecret = providers.environmentVariable("WEBHOOK_SECRET").orNull ?: localProps.getProperty("WEBHOOK_SECRET").orEmpty()
+val defaultWebhookUrl = "https://finance-rust-nine-16.vercel.app/api/transaction"
+val webhookUrl = providers.environmentVariable("WEBHOOK_URL").orNull
+    ?: localProps.getProperty("WEBHOOK_URL")
+    ?: defaultWebhookUrl
+
 fun javaLiteral(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n") + "\""
-fun validWebhookConfiguration(endpoint: String, secret: String): Boolean {
+
+fun validWebhookEndpoint(endpoint: String): Boolean {
     val uri = runCatching { URI(endpoint) }.getOrNull() ?: return false
     return uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.rawUserInfo == null
         && uri.rawQuery == null && uri.rawFragment == null && uri.path == "/api/transaction"
-        && Regex("[A-Za-z0-9_-]{32,128}").matches(secret)
-        && !Regex("replace|placeholder|change-?me|default|your[-_]|example|test[-_]|sample|mat-khau", RegexOption.IGNORE_CASE).containsMatchIn(secret)
 }
 
 android {
@@ -36,7 +38,6 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "WEBHOOK_URL", javaLiteral(webhookUrl))
-        buildConfigField("String", "WEBHOOK_SECRET", javaLiteral(webhookSecret))
     }
 
     buildTypes {
@@ -80,8 +81,8 @@ android.sourceSets.getByName("test").resources.srcDir("../../shared")
 
 val validateReleaseWebhookConfig = tasks.register("validateReleaseWebhookConfig") {
     doLast {
-        if (!validWebhookConfiguration(webhookUrl, webhookSecret)) {
-            throw GradleException("Release builds require a private HTTPS /api/transaction endpoint and a non-placeholder URL-safe secret of 32-128 characters.")
+        if (!validWebhookEndpoint(webhookUrl)) {
+            throw GradleException("Release builds require a valid HTTPS /api/transaction endpoint.")
         }
     }
 }
@@ -89,11 +90,23 @@ val validateReleaseWebhookConfig = tasks.register("validateReleaseWebhookConfig"
 tasks.register("verifyWebhookConfigurationPolicy") {
     doLast {
         val endpoint = "https://finance.example.invalid/api/transaction"
-        val syntheticSecret = "a".repeat(64)
-        check(validWebhookConfiguration(endpoint, syntheticSecret))
-        listOf("" to syntheticSecret, endpoint.replace("https", "http") to syntheticSecret,
-            endpoint to "", endpoint to "default".repeat(8), endpoint to "placeholder".repeat(5),
-            "$endpoint?secret=x" to syntheticSecret).forEach { (url, secret) -> check(!validWebhookConfiguration(url, secret)) }
+        check(validWebhookEndpoint(endpoint))
+        listOf(
+            "",
+            endpoint.replace("https", "http"),
+            "https://user:pass@finance.example.invalid/api/transaction",
+            "$endpoint?secret=x",
+            "$endpoint#fragment",
+            "https://finance.example.invalid/api/other",
+        ).forEach { url -> check(!validWebhookEndpoint(url)) }
+
+        val buildConfigFile = project.layout.buildDirectory.file("generated/source/buildConfig/debug/vn/phuong/financebridge/BuildConfig.java").get().asFile
+        if (buildConfigFile.exists()) {
+            val content = buildConfigFile.readText()
+            check(!content.contains("WEBHOOK_SECRET")) {
+                "SECURITY VIOLATION: BuildConfig contains WEBHOOK_SECRET"
+            }
+        }
         println("Webhook build policy: 7 checks passed")
     }
 }
@@ -103,4 +116,3 @@ tasks.configureEach {
         dependsOn(validateReleaseWebhookConfig)
     }
 }
-

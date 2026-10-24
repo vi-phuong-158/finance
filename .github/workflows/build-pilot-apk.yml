@@ -1,0 +1,95 @@
+name: Build VCB pilot APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: Full commit SHA reviewed for this public-safe pilot build
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vcb-pilot-apk
+  cancel-in-progress: false
+
+jobs:
+  admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate reviewed commit SHA
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != refs/heads/codex/* && "$GITHUB_REF" != refs/heads/main ]]; then
+            printf '%s\n' 'PILOT_BLOCKED_REF: use an active branch or main.' >&2
+            exit 1
+          fi
+          if [[ ! "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ || "$REVIEWED_SHA" != "$GITHUB_SHA" ]]; then
+            printf '%s\n' 'PILOT_BLOCKED_REVIEW: dispatch must resolve to the reviewed full SHA.' >&2
+            exit 1
+          fi
+
+  build:
+    needs: admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Build public-safe pilot APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy validateReleaseWebhookConfig
+          test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Security scan APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, zipfile
+          bc_path = 'app/build/generated/source/buildConfig/debug/vn/phuong/financebridge/BuildConfig.java'
+          assert os.path.isfile(bc_path), 'BuildConfig not found'
+          with open(bc_path) as f:
+              bc_content = f.read()
+          assert 'WEBHOOK_SECRET' not in bc_content, 'SECURITY VIOLATION: BuildConfig contains WEBHOOK_SECRET'
+          assert 'WEBHOOK_URL' in bc_content, 'BuildConfig must contain WEBHOOK_URL'
+
+          apk_path = 'app/build/outputs/apk/debug/app-debug.apk'
+          assert os.path.isfile(apk_path), 'APK not found'
+          with zipfile.ZipFile(apk_path, 'r') as z:
+              dex_files = [n for n in z.namelist() if n.endswith('.dex')]
+              assert dex_files, 'No dex files found'
+              for dex in dex_files:
+                  data = z.read(dex)
+                  assert b'WEBHOOK_SECRET' not in data, f'SECURITY VIOLATION: WEBHOOK_SECRET found in {dex}'
+          print('Security scan PASSED: APK contains no embedded secrets')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: finance-bridge-vcb-pilot-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

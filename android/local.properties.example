@@ -1,4 +1,4 @@
-# Copy file này thành local.properties và điền URL Vercel + Secret của bạn:
-WEBHOOK_URL=https://your-project.vercel.app/api/transaction
-WEBHOOK_SECRET=replace-with-the-same-private-secret-used-by-vercel
-
+# Cấu hình cục bộ cho Android build (tùy chọn)
+# WEBHOOK_URL mặc định trỏ tới production backend nếu không khai báo.
+# WEBHOOK_SECRET KHÔNG ĐƯỢC để trong file này vì secret được cấu hình lúc runtime trong ứng dụng.
+WEBHOOK_URL=https://finance-rust-nine-16.vercel.app/api/transaction

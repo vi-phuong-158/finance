@@ -18,15 +18,20 @@ class UploadWorker(
         withContext(Dispatchers.IO) {
             val eventId = inputData.getString(INPUT_EVENT_ID) ?: return@withContext Result.failure()
             val outbox = TransactionOutbox(applicationContext)
-            var transaction = outbox.get(eventId)
+            if (outbox.get(eventId) == null) {
+                migrateLegacyRequest(eventId, outbox) ?: return@withContext Result.failure()
+            }
 
-            if (transaction == null) {
-                transaction = migrateLegacyRequest(eventId, outbox) ?: return@withContext Result.failure()
+            val credentialStore = WebhookCredentialStore(applicationContext)
+            val secret = credentialStore.getSecret()
+            if (secret == null) {
+                outbox.markBlocked(eventId, "MISSING_CREDENTIAL")
+                return@withContext Result.failure()
             }
 
             val processor = UploadProcessor(
                 outbox,
-                post = { event -> WebhookClient.post(buildTransactionPayload(event)) },
+                post = { event -> WebhookClient.post(buildTransactionPayload(event), secret = secret) },
                 payloadBytes = { event -> buildTransactionPayload(event).toString().toByteArray(StandardCharsets.UTF_8).size },
             )
             when (processor.upload(eventId)) {

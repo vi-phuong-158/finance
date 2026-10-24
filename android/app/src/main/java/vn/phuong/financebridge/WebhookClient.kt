@@ -22,17 +22,25 @@ object WebhookClient {
         .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    fun post(payload: JSONObject): WebhookResponse {
-        val endpoint = BuildConfig.WEBHOOK_URL
-        val secret = BuildConfig.WEBHOOK_SECRET
-        if (!WebhookConfiguration.isValid(endpoint, secret)) {
+    fun post(
+        payload: JSONObject,
+        endpoint: String = BuildConfig.WEBHOOK_URL,
+        secret: String? = null,
+    ): WebhookResponse = postJson(payload.toString(), endpoint, secret)
+
+    fun postJson(
+        payloadJson: String,
+        endpoint: String = BuildConfig.WEBHOOK_URL,
+        secret: String? = null,
+    ): WebhookResponse {
+        if (secret.isNullOrBlank() || !WebhookConfiguration.isValid(endpoint, secret)) {
             return WebhookResponse(0, null, "CLIENT_CONFIGURATION_ERROR")
         }
 
         val request = Request.Builder()
             .url(endpoint)
             .header("X-Webhook-Secret", secret)
-            .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .post(payloadJson.toRequestBody("application/json; charset=utf-8".toMediaType()))
             .build()
 
         httpClient.newCall(request).execute().use { response ->

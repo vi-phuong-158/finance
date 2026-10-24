@@ -43,14 +43,35 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
-      - run: ./gradlew --no-daemon assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy
-      - name: Reject release without private configuration
+      - run: ./gradlew --no-daemon assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy validateReleaseWebhookConfig
+      - name: Reject release builds with insecure or malformed endpoint
         run: |
-          if ./gradlew --no-daemon validateReleaseWebhookConfig > "$RUNNER_TEMP/release-config-check.log" 2>&1; then
-            echo 'Unconfigured release validation unexpectedly succeeded'
+          if WEBHOOK_URL="http://insecure.example.com/api/transaction" ./gradlew --no-daemon validateReleaseWebhookConfig > "$RUNNER_TEMP/insecure-endpoint-check.log" 2>&1; then
+            echo 'Insecure endpoint release validation unexpectedly succeeded'
             exit 1
           fi
-          grep -q 'Release builds require' "$RUNNER_TEMP/release-config-check.log"
+          grep -q 'Release builds require a valid HTTPS /api/transaction endpoint' "$RUNNER_TEMP/insecure-endpoint-check.log"
+      - name: Security scan APK artifact and BuildConfig
+        run: |
+          python3 - <<'PY'
+          import os, zipfile
+          bc_path = 'app/build/generated/source/buildConfig/debug/vn/phuong/financebridge/BuildConfig.java'
+          assert os.path.isfile(bc_path), 'BuildConfig not found'
+          with open(bc_path) as f:
+              bc_content = f.read()
+          assert 'WEBHOOK_SECRET' not in bc_content, 'BuildConfig must not contain WEBHOOK_SECRET'
+          assert 'WEBHOOK_URL' in bc_content, 'BuildConfig must contain WEBHOOK_URL'
+
+          apk_path = 'app/build/outputs/apk/debug/app-debug.apk'
+          assert os.path.isfile(apk_path), 'APK artifact not found'
+          with zipfile.ZipFile(apk_path, 'r') as z:
+              dex_files = [n for n in z.namelist() if n.endswith('.dex')]
+              assert dex_files, 'No dex files found in APK'
+              for dex in dex_files:
+                  data = z.read(dex)
+                  assert b'WEBHOOK_SECRET' not in data, f'WEBHOOK_SECRET found in {dex}'
+          print('Security scan PASSED: APK and BuildConfig are completely free of embedded WEBHOOK_SECRET')
+          PY
       - name: Unit test counts
         run: |
           python3 - <<'PY'
