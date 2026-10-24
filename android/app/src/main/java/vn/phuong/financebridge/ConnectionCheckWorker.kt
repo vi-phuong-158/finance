@@ -14,6 +14,12 @@ class ConnectionCheckWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val credentialStore = WebhookCredentialStore(applicationContext)
+        val secret = credentialStore.getSecret()
+        if (secret == null) {
+            return@withContext output("Chưa cấu hình mã kết nối", "MISSING_CREDENTIAL")
+        }
+
         val postedAt = System.currentTimeMillis()
         val event = PendingTransaction(
             eventId = EventIdentity.createEventId("VCB", postedAt, TEST_TRANSACTION_TEXT),
@@ -26,7 +32,7 @@ class ConnectionCheckWorker(
         )
 
         val response = try {
-            WebhookClient.post(buildTransactionPayload(event, dryRun = true))
+            WebhookClient.post(buildTransactionPayload(event, dryRun = true), secret = secret)
         } catch (_: IOException) {
             return@withContext Result.retry()
         } catch (_: RuntimeException) {

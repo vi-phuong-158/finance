@@ -1,5 +1,6 @@
 package vn.phuong.financebridge
 
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -26,5 +27,15 @@ class WebhookClientTest {
             assertFalse(WebhookClient.isTerminalSuccess(WebhookResponse(200, it, null)))
         }
         assertFalse(WebhookClient.isTerminalSuccess(WebhookResponse(503, "SAVED_TRANSACTION", null)))
+    }
+
+    @Test fun missingOrInvalidSecretFailsClosedWithoutNetworkRequest() {
+        val payloadJson = """{"test":"data"}"""
+        val invalidSecrets = listOf(null, "", "short", "default".repeat(8), "a".repeat(31))
+        invalidSecrets.forEach { secret ->
+            val response = WebhookClient.postJson(payloadJson, secret = secret)
+            assertEquals("CLIENT_CONFIGURATION_ERROR", response.errorCode)
+            assertEquals(0, response.httpCode)
+        }
     }
 }

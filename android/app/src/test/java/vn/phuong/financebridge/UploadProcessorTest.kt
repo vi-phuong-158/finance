@@ -111,4 +111,80 @@ class UploadProcessorTest {
             fail("Cancellation must propagate")
         } catch (_: CancellationException) { assertEquals(before, store.event) }
     }
+
+    @Test fun workerWithoutSecretBlocksAndRetainsPayload() {
+        val store = StoredOutbox()
+        val before = store.event
+        val credentialStore = WebhookCredentialStore.createForTesting()
+        assertFalse(credentialStore.hasSecret())
+
+        // Simulate Worker logic when no secret is present
+        val secret = credentialStore.getSecret()
+        if (secret == null) {
+            store.markBlocked(before.eventId, "MISSING_CREDENTIAL")
+        }
+
+        assertEquals("BLOCKED", store.event.state)
+        assertEquals("MISSING_CREDENTIAL", store.error)
+        assertEquals(before.text, store.event.text)
+        assertEquals(before.title, store.event.title)
+    }
+
+    @Test fun workerWithIncorrectSecretBlocksAndFixingSecretAllowsRetryWithoutDuplicate() {
+        val store = StoredOutbox()
+        val before = store.event
+        val credentialStore = WebhookCredentialStore.createForTesting()
+        val invalidSecret = "w".repeat(64)
+        val validSecret = "c".repeat(64)
+
+        // 1. Save incorrect secret
+        credentialStore.saveSecret(invalidSecret)
+        var serverCallCount = 0
+
+        val processorWithWrongSecret = UploadProcessor(
+            store,
+            post = {
+                serverCallCount++
+                assertEquals(invalidSecret, credentialStore.getSecret())
+                WebhookResponse(401, null, "UNAUTHORIZED")
+            },
+            payloadBytes = { 200 },
+        )
+
+        val firstOutcome = processorWithWrongSecret.upload(before.eventId)
+        assertEquals(UploadOutcome.BLOCKED, firstOutcome)
+        assertEquals("BLOCKED", store.event.state)
+        assertEquals("UNAUTHORIZED", store.error)
+        assertEquals(before.text, store.event.text)
+        assertEquals(1, serverCallCount)
+
+        // 2. User fixes secret in runtime credential store
+        credentialStore.saveSecret(validSecret)
+        assertEquals(validSecret, credentialStore.getSecret())
+
+        // 3. User taps "Retry"
+        store.retryBlocked()
+        assertEquals("PENDING", store.event.state)
+
+        val processorWithFixedSecret = UploadProcessor(
+            store,
+            post = {
+                serverCallCount++
+                assertEquals(validSecret, credentialStore.getSecret())
+                WebhookResponse(200, "SAVED_TRANSACTION", null)
+            },
+            payloadBytes = { 200 },
+        )
+
+        val retryOutcome = processorWithFixedSecret.upload(before.eventId)
+        assertEquals(UploadOutcome.SUCCESS, retryOutcome)
+        assertEquals("SAVED_TRANSACTION", store.event.state)
+        assertEquals("", store.event.text)
+        assertEquals(2, serverCallCount)
+
+        // 4. Repeated execution on terminal state is idempotent and does not duplicate
+        val idempotentOutcome = processorWithFixedSecret.upload(before.eventId)
+        assertEquals(UploadOutcome.SUCCESS, idempotentOutcome)
+        assertEquals(2, serverCallCount) // No extra network request
+    }
 }

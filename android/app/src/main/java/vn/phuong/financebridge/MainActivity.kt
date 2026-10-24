@@ -9,14 +9,15 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Observer
@@ -52,16 +53,37 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun StatusScreen(context: Context) {
+    val appContext = context.applicationContext
+    val credentialStore = remember(appContext) { WebhookCredentialStore(appContext) }
+    var hasConfiguredSecret by remember { mutableStateOf(credentialStore.hasSecret()) }
+    var isEditingSecret by remember { mutableStateOf(!hasConfiguredSecret) }
+    var secretInput by remember { mutableStateOf("") }
+    var secretFormatError by remember { mutableStateOf<String?>(null) }
+    var isConnectionVerified by remember { mutableStateOf(false) }
+
     var hasNotifPermission by remember { mutableStateOf(isNotificationServiceEnabled(context)) }
     var isBatteryUnrestricted by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
-    var connectionStatus by remember { mutableStateOf("Chưa kiểm tra") }
+    var connectionStatus by remember { mutableStateOf(if (hasConfiguredSecret) "Đã lưu cấu hình; chưa kiểm tra" else "Chưa cấu hình") }
     var checkInProgress by remember { mutableStateOf(false) }
     var connectionWorkId by remember { mutableStateOf<UUID?>(null) }
     var queueError by remember { mutableStateOf<String?>(null) }
     var summary by remember { mutableStateOf(OutboxSummary(0, 0, emptyList())) }
-    val appContext = context.applicationContext
     val workManager = remember(context) { WorkManager.getInstance(context) }
     val coroutineScope = rememberCoroutineScope()
+
+    fun triggerConnectionCheck() {
+        checkInProgress = true
+        connectionStatus = "Đang xếp hàng kiểm tra kết nối..."
+        val request = OneTimeWorkRequestBuilder<ConnectionCheckWorker>()
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+            )
+            .setInputData(workDataOf("dryRun" to true))
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+        connectionWorkId = request.id
+        workManager.enqueue(request)
+    }
 
     LaunchedEffect(appContext) {
         val pendingEventIds = withContext(Dispatchers.IO) {
@@ -69,11 +91,14 @@ fun StatusScreen(context: Context) {
                 TransactionOutbox(appContext).apply { purgeOldTerminalEntries() }.pendingEventIds()
             }.getOrDefault(emptyList())
         }
-        pendingEventIds.forEach { schedulePendingUpload(workManager, it) }
+        if (credentialStore.hasSecret()) {
+            pendingEventIds.forEach { schedulePendingUpload(workManager, it) }
+        }
 
         while (isActive) {
             hasNotifPermission = isNotificationServiceEnabled(appContext)
             isBatteryUnrestricted = isIgnoringBatteryOptimizations(appContext)
+            hasConfiguredSecret = credentialStore.hasSecret()
             queueError = appContext.getSharedPreferences("finance_bridge_status", Context.MODE_PRIVATE)
                 .getString("queue_error_code", null)
             summary = withContext(Dispatchers.IO) {
@@ -95,8 +120,10 @@ fun StatusScreen(context: Context) {
                     || latest?.state == WorkInfo.State.RUNNING
                     || latest?.state == WorkInfo.State.BLOCKED
                 if (latest?.state == WorkInfo.State.SUCCEEDED) {
-                    connectionStatus = latest.outputData.getString("message") ?: "Máy chủ đã kiểm tra kết nối"
+                    isConnectionVerified = true
+                    connectionStatus = latest.outputData.getString("message") ?: "Kết nối thành công"
                 } else if (latest?.state == WorkInfo.State.FAILED) {
+                    isConnectionVerified = false
                     connectionStatus = latest.outputData.getString("message") ?: "Không kết nối được; kiểm tra cấu hình"
                 } else if (latest?.state == WorkInfo.State.ENQUEUED || latest?.state == WorkInfo.State.BLOCKED) {
                     connectionStatus = "Đang chờ kết nối mạng..."
@@ -110,14 +137,137 @@ fun StatusScreen(context: Context) {
         }
     }
 
+    val configStatusLabel = when {
+        isConnectionVerified -> "Kết nối thành công"
+        secretFormatError != null -> "Cấu hình không hợp lệ"
+        hasConfiguredSecret -> "Đã cấu hình"
+        else -> "Chưa cấu hình"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(20.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(text = "Đồng Bộ Thu Chi Tự Động", style = MaterialTheme.typography.headlineSmall)
 
+        // Card Cấu hình kết nối
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(text = "Cấu hình kết nối", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "Máy chủ: ${BuildConfig.WEBHOOK_URL}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "Trạng thái: $configStatusLabel",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                if (hasConfiguredSecret && !isEditingSecret) {
+                    Text(
+                        text = "Mã kết nối: •••••••••••• (Đã lưu an toàn)",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            isEditingSecret = true
+                            secretInput = ""
+                            secretFormatError = null
+                        }) {
+                            Text("Đổi mã kết nối")
+                        }
+                        Button(
+                            onClick = { triggerConnectionCheck() },
+                            enabled = !checkInProgress,
+                        ) {
+                            Text(if (checkInProgress) "Đang kiểm tra..." else "Kiểm tra kết nối")
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = secretInput,
+                        onValueChange = {
+                            secretInput = it
+                            secretFormatError = null
+                        },
+                        label = { Text("Mã kết nối") },
+                        placeholder = { Text("Nhập secret từ backend Vercel") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        isError = secretFormatError != null,
+                        supportingText = secretFormatError?.let { { Text(it) } },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = {
+                                val trimmed = secretInput.trim()
+                                if (!WebhookConfiguration.isValidSecret(trimmed)) {
+                                    secretFormatError = "Cấu hình không hợp lệ: Mã kết nối cần 32-128 ký tự an toàn"
+                                    return@Button
+                                }
+                                if (credentialStore.saveSecret(trimmed)) {
+                                    hasConfiguredSecret = true
+                                    isEditingSecret = false
+                                    secretInput = ""
+                                    secretFormatError = null
+                                    isConnectionVerified = false
+                                    connectionStatus = "Đã lưu cấu hình; nhấn 'Kiểm tra kết nối'"
+                                } else {
+                                    secretFormatError = "Không thể lưu mã kết nối an toàn"
+                                }
+                            },
+                        ) {
+                            Text("Lưu cấu hình")
+                        }
+                        Button(
+                            onClick = {
+                                val trimmed = secretInput.trim()
+                                if (!WebhookConfiguration.isValidSecret(trimmed)) {
+                                    secretFormatError = "Cấu hình không hợp lệ: Mã kết nối cần 32-128 ký tự an toàn"
+                                    return@Button
+                                }
+                                if (credentialStore.saveSecret(trimmed)) {
+                                    hasConfiguredSecret = true
+                                    isEditingSecret = false
+                                    secretInput = ""
+                                    secretFormatError = null
+                                    isConnectionVerified = false
+                                    triggerConnectionCheck()
+                                } else {
+                                    secretFormatError = "Không thể lưu mã kết nối an toàn"
+                                }
+                            },
+                            enabled = !checkInProgress,
+                        ) {
+                            Text("Lưu và kiểm tra")
+                        }
+                    }
+                }
+
+                Text(
+                    text = if (checkInProgress) "◷ $connectionStatus" else "• Kết quả: $connectionStatus",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        // Quyền hệ thống
         Text(text = if (hasNotifPermission) "✓ Quyền đọc thông báo: Đã bật" else "✗ Quyền đọc thông báo: Chưa bật")
         if (!hasNotifPermission) {
             TextButton(onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) {
@@ -139,26 +289,7 @@ fun StatusScreen(context: Context) {
             }
         }
 
-        Text(text = if (checkInProgress) "◷ $connectionStatus" else "• Máy chủ: $connectionStatus")
-        Button(
-            onClick = {
-                checkInProgress = true
-                connectionStatus = "Đang xếp hàng kiểm tra kết nối..."
-                val request = OneTimeWorkRequestBuilder<ConnectionCheckWorker>()
-                    .setConstraints(
-                        Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
-                    )
-                    .setInputData(workDataOf("dryRun" to true))
-                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                connectionWorkId = request.id
-                workManager.enqueue(request)
-            },
-            enabled = !checkInProgress,
-        ) {
-            Text(if (checkInProgress) "Đang kiểm tra..." else "Kiểm tra kết nối")
-        }
-
+        // Hàng đợi outbox
         Text(text = "Hàng đợi: ${summary.pendingCount} đang chờ · ${summary.blockedCount} cần xử lý")
         if (summary.blockedCount > 0) {
             Button(
@@ -180,12 +311,10 @@ fun StatusScreen(context: Context) {
             Text(text = "Lỗi: Không lưu được vào hàng đợi của điện thoại. Giải phóng dung lượng rồi thử lại.")
         }
 
+        // Giao dịch gần đây
         Text(text = "Giao dịch gần đây", style = MaterialTheme.typography.titleMedium)
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (summary.recentEntries.isEmpty()) {
@@ -241,4 +370,3 @@ private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
     val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     return pm.isIgnoringBatteryOptimizations(context.packageName)
 }
-
