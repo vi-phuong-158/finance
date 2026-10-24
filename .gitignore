@@ -19,6 +19,7 @@ android/.kotlin/
 **/service-account*.json
 **/google-credentials*.json
 **/google-service-account*.json
+**/.vercel/
 
 # Package manager and temporary build output
 **/node_modules/

@@ -29,7 +29,7 @@ data class OutboxSummary(
     val recentEntries: List<OutboxEntry>,
 )
 
-class TransactionOutbox(context: Context) {
+class TransactionOutbox(context: Context) : UploadOutbox {
     private val helper = OutboxDatabase(context.applicationContext)
 
     /** Inserts once. An event already marked terminal or blocked is never silently re-queued. */
@@ -66,7 +66,7 @@ class TransactionOutbox(context: Context) {
         }
     }
 
-    fun get(eventId: String): PendingTransaction? = helper.readableDatabase.query(
+    override fun get(eventId: String): PendingTransaction? = helper.readableDatabase.query(
         TABLE,
         arrayOf(COL_EVENT_ID, COL_BANK, COL_PACKAGE, COL_TITLE, COL_TEXT, COL_POSTED_AT, COL_STATE),
         "$COL_EVENT_ID = ?",
@@ -90,26 +90,26 @@ class TransactionOutbox(context: Context) {
         )
     }
 
-    fun markAttempt(eventId: String) {
+    override fun markAttempt(eventId: String) {
         helper.writableDatabase.execSQL(
             "UPDATE $TABLE SET $COL_ATTEMPTS = $COL_ATTEMPTS + 1, $COL_ERROR = NULL, $COL_UPDATED_AT = ? WHERE $COL_EVENT_ID = ?",
             arrayOf(System.currentTimeMillis(), eventId),
         )
     }
 
-    fun markRetryable(eventId: String, errorCode: String) = update(eventId) {
+    override fun markRetryable(eventId: String, errorCode: String) = update(eventId) {
         put(COL_STATE, STATE_PENDING)
         put(COL_ERROR, safeErrorCode(errorCode))
         put(COL_UPDATED_AT, System.currentTimeMillis())
     }
 
-    fun markBlocked(eventId: String, errorCode: String) = update(eventId) {
+    override fun markBlocked(eventId: String, errorCode: String) = update(eventId) {
         put(COL_STATE, STATE_BLOCKED)
         put(COL_ERROR, safeErrorCode(errorCode))
         put(COL_UPDATED_AT, System.currentTimeMillis())
     }
 
-    fun markTerminal(eventId: String, resultStatus: String) = update(eventId) {
+    override fun markTerminal(eventId: String, resultStatus: String) = update(eventId) {
         put(COL_STATE, safeTerminalState(resultStatus))
         put(COL_TITLE, null as String?)
         put(COL_TEXT, null as String?)

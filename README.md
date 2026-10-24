@@ -7,6 +7,10 @@ Gói mã nguồn gồm:
 
 Mã nguồn chưa được nghiệm thu trên điện thoại hay Google Sheets thật. MVP ưu tiên VCB; BIDV/VietinBank cần mẫu đã che dữ liệu để viết parser. Tiến độ triển khai và các gate còn chờ được ghi tại [docs/DE_XUAT_TRIEN_KHAI.md](docs/DE_XUAT_TRIEN_KHAI.md).
 
+Hướng dẫn cài đặt/pilot theo 12 bước: [VCB Production E2E](docs/VCB_PRODUCTION_E2E.md). Ghi kết quả điện thoại vào [checklist riêng](docs/VCB_DEVICE_CHECKLIST.md). Không cần sửa source để đổi cấu hình triển khai.
+
+Backend có `GET /api/health` (chỉ kiểm tra cấu hình cục bộ), `npm run sheets:bootstrap` (xem kế hoạch; thêm `-- --apply` để tạo tab/header còn thiếu) và `npm run check:deployment` (health + dry-run không ghi giao dịch). Hai lệnh đọc cấu hình riêng từ `vercel/.env.local`.
+
 ## Google Sheets
 
 Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `SPREADSHEET_ID` trong Vercel. Không đưa ID thật, secret hoặc khóa service account vào repository.
@@ -23,7 +27,7 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
    npm test
    npm run typecheck
    ```
-2. Đẩy thư mục `vercel/` lên GitHub và import vào Vercel (hoặc chạy `npx vercel --prod`).
+2. Import repo vào Vercel, đặt Root Directory = `vercel`, Framework = Other, Node 24.x, Install Command = `npm ci`; không đặt output frontend. Chỉ hai endpoint public nằm trong `api`, mã nội bộ nằm trong `lib`.
 3. Cài đặt bốn biến môi trường trong **Vercel Settings -> Environment Variables**. Dùng `.env.example` làm danh sách tên, rồi tự điền ID Sheet và thông tin service account. Không commit `.env`, `android/local.properties` hay khóa service account.
    - `SPREADSHEET_ID` = ID Sheet riêng tư
    - `WEBHOOK_SECRET` = chuỗi bí mật ngẫu nhiên được tạo riêng
@@ -35,7 +39,7 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
 2. Mở file `android/local.properties` (hoặc tạo mới cạnh `settings.gradle.kts`) và thêm 2 dòng:
    ```properties
    WEBHOOK_URL=https://ten-project-cua-ban.vercel.app/api/transaction
-   WEBHOOK_SECRET=mat-khau-bi-mat-tu-chon
+   WEBHOOK_SECRET=replace-with-a-private-random-url-safe-secret
    ```
 3. Checkout có Gradle Wrapper 8.7, pin checksum bản phân phối và wrapper JAR đã được đối chiếu checksum chính thức. Chuẩn bị JDK 17, Android SDK platform 34 và build-tools 34.0.0; đặt `ANDROID_HOME` tới SDK, rồi chạy:
    ```bash
@@ -43,6 +47,8 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
    ./gradlew assembleDebug testDebugUnitTest
    ```
    Trên Windows dùng `gradlew.bat assembleDebug testDebugUnitTest`. Không cần cài Gradle toàn cục. Cấu hình giữ AGP 8.5.2, Kotlin 1.9.24 và Compose Compiler 1.5.14. Bản debug không cần webhook/secret và sẽ chuyển sự kiện sang `BLOCKED` nếu chưa cấu hình; bản release yêu cầu HTTPS và secret riêng. Không commit APK hoặc `local.properties`.
+
+URL phải trỏ đúng HTTPS `/api/transaction`, không chứa thông tin đăng nhập/query/fragment. Secret cần 32–128 ký tự URL-safe ngẫu nhiên, không dùng placeholder; ví dụ trong file cấu hình cố ý không hợp lệ. Biến môi trường WEBHOOK_URL/WEBHOOK_SECRET ưu tiên hơn local.properties. APK release cần ký riêng trước khi cài; APK debug đã cấu hình có thể dùng pilot cá nhân. Giữ nguyên chữ ký khi cập nhật để bảo toàn outbox.
 
 ## Hợp đồng sự kiện và bảo vệ dữ liệu
 

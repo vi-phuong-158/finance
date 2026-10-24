@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { createEventId } from '../event-identity.js';
 import test from 'node:test';
+import { SYNTHETIC_SECRET, testEnvironment } from './support.js';
 import {
   RAW_CAPTURE_HEADERS,
   TRANSACTION_HEADERS,
   validateAndProcessTransaction,
-} from '../api/transaction-service.js';
+} from '../lib/transaction-service.js';
 
-const secret = 'test-only-webhook-secret-value';
-const spreadsheetId = 'test-spreadsheet';
+const secret = SYNTHETIC_SECRET;
 const time = Date.UTC(2026, 9, 24, 4, 15);
 const expenseText = 'Số dư TK VCB ACCOUNT-TEST -10,000 VND lúc 01-01-2026 12:00:00. Số dư 50,000 VND. Ref MBVCB.TESTREF.TEST SUPERMARKET';
 
@@ -35,13 +35,7 @@ function request(overrides: Record<string, unknown> = {}) {
 }
 
 function environment(overrides: Record<string, string | undefined> = {}) {
-  return {
-    WEBHOOK_SECRET: secret,
-    SPREADSHEET_ID: spreadsheetId,
-    GOOGLE_CLIENT_EMAIL: 'finance-bridge-test@example.invalid',
-    GOOGLE_PRIVATE_KEY: 'test-only-key',
-    ...overrides,
-  };
+  return testEnvironment(overrides);
 }
 
 function mockSheets(options: { transactionIds?: unknown[]; rawIds?: unknown[]; headersValid?: boolean; fail?: boolean } = {}) {

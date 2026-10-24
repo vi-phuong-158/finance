@@ -6,7 +6,9 @@
   "engines": { "node": ">=24.0.0" },
   "scripts": {
     "test": "node --experimental-strip-types --import ./tests/register-ts.mjs --test \"tests/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sheets:bootstrap": "node --env-file=.env.local --import tsx scripts/bootstrap-sheets.ts",
+    "check:deployment": "node --env-file=.env.local --import tsx scripts/check-deployment.ts"
   },
   "dependencies": {
     "googleapis": "^144.0.0"
