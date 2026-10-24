@@ -10,7 +10,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 class BankNotificationListener : NotificationListenerService() {
@@ -31,11 +30,6 @@ class BankNotificationListener : NotificationListenerService() {
             "com.vnpay.bidv" to "BIDV"
         )
 
-        fun computeEventId(bank: String, normalizedText: String): String {
-            val payload = "$bank:$normalizedText"
-            val digest = MessageDigest.getInstance("SHA-256").digest(payload.toByteArray(Charsets.UTF_8))
-            return digest.joinToString("") { "%02x".format(it) }.take(16)
-        }
     }
 
     override fun onListenerConnected() {
@@ -78,8 +72,8 @@ class BankNotificationListener : NotificationListenerService() {
             return
         }
 
-        val eventId = computeEventId(bank, normalizedText)
         val postedAt = sbn.postTime
+        val eventId = EventIdentity.createEventId(bank, postedAt, normalizedText)
 
         serviceScope.launch {
             try {

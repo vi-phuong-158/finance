@@ -20,11 +20,7 @@ object SensitiveFilter {
     )
 
     fun normalizeText(raw: String): String {
-        return Normalizer.normalize(raw, Normalizer.Form.NFC)
-            .replace('\u00A0', ' ')
-            .replace(Regex("[\\r\\n\\t]+"), " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
+        return EventIdentity.normalizeText(raw)
     }
 
     fun shouldProcess(title: String, normalizedText: String): Boolean {

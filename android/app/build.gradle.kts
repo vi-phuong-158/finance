@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 
 plugins {
     id("com.android.application")
@@ -57,6 +58,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")
@@ -66,9 +68,11 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
+android.sourceSets.getByName("test").resources.srcDir("../../shared")
+
 val validateReleaseWebhookConfig = tasks.register("validateReleaseWebhookConfig") {
     doLast {
-        val endpoint = runCatching { java.net.URI(webhookUrl) }.getOrNull()
+        val endpoint = runCatching { URI(webhookUrl) }.getOrNull()
         if (endpoint?.scheme != "https" || endpoint.host.isNullOrBlank()) {
             throw GradleException("Release builds require WEBHOOK_URL to use HTTPS and include a host.")
         }

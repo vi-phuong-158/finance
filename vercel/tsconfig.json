@@ -9,6 +9,6 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["api/**/*", "parsers/**/*", "categories.ts", "tests/**/*"]
+  "include": ["api/**/*", "parsers/**/*", "*.ts", "tests/**/*"]
 }
 

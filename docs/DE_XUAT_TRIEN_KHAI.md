@@ -1,6 +1,8 @@
 # Finance Bridge — Đánh giá và đề xuất triển khai
 
-Ngày đánh giá: 24/10/2026. Phạm vi: mã nguồn tại `D:\04. Github\finance_bridge`, README và SPEC_V3_1.md.
+Ngày đánh giá: 24/10/2026. Phạm vi: mã nguồn Finance Bridge, README và SPEC_V3_1.md.
+
+> Các mục 1–8 bên dưới là nhật ký đánh giá trước hardening PR #1. Hợp đồng hiện tại ở README/SPEC: eventId SHA-256 đầy đủ trên `bank:postedAt:normalizedText`, dedup toàn lịch sử hai tab, masking dùng chung cho Raw_Capture/description/counterparty, lockfile npm và Gradle Wrapper 8.7. Đã sửa lỗi compile Kotlin ở WebhookClient, TransactionOutbox và tham chiếu URI trong Gradle. Backend cục bộ: `npm ci` thành công, 33/33 test, typecheck exit 0. Build cục bộ Android dừng vì thiếu JDK/SDK; workflow CI chuẩn bị JDK 17/SDK 34 và chạy `assembleDebug testDebugUnitTest` từ checkout sạch. Kết quả CI đúng HEAD được cập nhật trên PR; không suy ra nghiệm thu điện thoại hoặc Google Sheets thật từ unit test.
 
 ## 1. Kết luận
 

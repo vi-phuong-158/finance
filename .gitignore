@@ -8,6 +8,12 @@
 android/local.properties
 android/.gradle/
 android/app/build/
+android/build/
+android/.kotlin/
+**/*.apk
+**/*.aab
+**/*.pem
+**/*.key
 **/*.jks
 **/*.keystore
 **/service-account*.json

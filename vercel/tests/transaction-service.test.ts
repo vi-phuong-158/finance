@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createEventId } from '../event-identity.js';
 import test from 'node:test';
 import {
   RAW_CAPTURE_HEADERS,
@@ -12,8 +12,8 @@ const spreadsheetId = 'test-spreadsheet';
 const time = Date.UTC(2026, 9, 24, 4, 15);
 const expenseText = 'Số dư TK VCB ACCOUNT-TEST -10,000 VND lúc 01-01-2026 12:00:00. Số dư 50,000 VND. Ref MBVCB.TESTREF.TEST SUPERMARKET';
 
-function eventId(bank: string, text: string): string {
-  return createHash('sha256').update(`${bank}:${text.normalize('NFC').replace(/[\r\n\t\u00a0]/g, ' ').replace(/\s+/g, ' ').trim()}`).digest('hex').slice(0, 16);
+function eventId(bank: string, text: string, postedAt = time): string {
+  return createEventId(bank, postedAt, text);
 }
 
 function request(overrides: Record<string, unknown> = {}) {
@@ -117,7 +117,7 @@ test('rejects missing JSON content type, malformed payload, and an incorrect ban
   const mismatchedBank = request({ packageName: 'com.vnpay.bidv' });
   assert.equal((await run(mismatchedBank)).httpStatus, 400);
 
-  const mismatchedEventId = request({ eventId: 'f'.repeat(16) });
+  const mismatchedEventId = request({ eventId: 'f'.repeat(64) });
   assert.equal((await run(mismatchedEventId)).body.error, 'EVENT_ID_MISMATCH');
 });
 
@@ -200,5 +200,64 @@ test('maps Sheets failures to a retryable response without leaking error details
 
   assert.equal(result.httpStatus, 503);
   assert.deepEqual(result.body, { error: 'UPSTREAM_UNAVAILABLE' });
+});
+
+test('rejects a modified postedAt as EVENT_ID_MISMATCH before touching Sheets', async () => {
+  const result = await run(request({ postedAt: time + 1 }));
+  assert.equal(result.httpStatus, 400);
+  assert.equal(result.body.error, 'EVENT_ID_MISMATCH');
+  assert.equal(result.factoryCalls, 0);
+});
+
+test('same content at different postedAt values saves two distinct events', async () => {
+  const firstId = eventId('VCB', expenseText);
+  const secondId = eventId('VCB', expenseText, time + 1);
+  const result = await run(request({ postedAt: time + 1, eventId: secondId }), {
+    sheets: mockSheets({ transactionIds: [firstId] }),
+  });
+  assert.notEqual(firstId, secondId);
+  assert.equal(result.body.status, 'SAVED_TRANSACTION');
+  assert.equal(result.sheets.writes.transaction?.[8], secondId);
+});
+
+test('detects duplicates older than the last 1000 rows in both tabs', async () => {
+  const id = eventId('VCB', expenseText);
+  const ids = [id, ...Array.from({ length: 1500 }, (_, index) => `synthetic-${index}`)];
+  for (const options of [{ transactionIds: ids }, { rawIds: ids }]) {
+    const result = await run(request(), { sheets: mockSheets(options) });
+    assert.equal(result.body.status, 'DUPLICATE_IGNORED');
+    assert.deepEqual(result.sheets.writes, {});
+  }
+});
+
+test('masks separated identifiers in Raw_Capture and preserves money, time and eventId', async () => {
+  const identifier = '9'.repeat(4) + ' ' + '9'.repeat(3) + ' ' + '9'.repeat(3);
+  const text = `GD TK ${identifier} +100,000 VND. SD 900,000 VND 01-01-2026 12:00:00`;
+  const id = eventId('BIDV', text);
+  const result = await run(request({ bank: 'BIDV', packageName: 'com.vnpay.bidv', text, eventId: id }));
+  assert.equal(result.body.status, 'SAVED_RAW_CAPTURE');
+  assert.equal(result.sheets.writes.raw?.[2], 'GD TK *** +100,000 VND. SD 900,000 VND 01-01-2026 12:00:00');
+  assert.equal(result.sheets.writes.raw?.[3], id);
+});
+
+test('masks identifiers in both parsed description and counterparty, including short Ref', async () => {
+  for (const ref of ['9'.repeat(12), '9999 999 999', '9999-999-999', 'MBVCB.TEST.9999-999-999']) {
+    const text = expenseText.replace('MBVCB.TESTREF.TEST SUPERMARKET', ref);
+    const result = await run(request({ text, eventId: eventId('VCB', text) }));
+    assert.equal(result.body.status, 'SAVED_TRANSACTION');
+    const row = result.sheets.writes.transaction!;
+    assert.equal(row[3], 10_000);
+    assert.equal(row[4], 50_000);
+    assert.equal(row[5], '***');
+    assert.ok(String(row[6]).endsWith('***'));
+  }
+});
+
+test('security blacklist stays fail-closed even with positive transaction signals', async () => {
+  for (const title of ['OTP', 'Smart OTP', 'verification code', 'Mã xác thực', 'Mật khẩu', 'Đăng nhập', 'Thiết bị mới', 'Sinh trắc học', 'Khóa thẻ', 'Mở khóa thẻ', 'CVV', 'Khuyến mại', 'Ưu đãi']) {
+    const result = await run(request({ title }));
+    assert.equal(result.body.status, 'DROPPED_SENSITIVE', title);
+    assert.equal(result.factoryCalls, 0);
+  }
 });
 

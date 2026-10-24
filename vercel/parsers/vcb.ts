@@ -1,4 +1,5 @@
 import { matchCategory } from '../categories.js';
+import { maskSensitiveIdentifiers } from '../sensitive-identifiers.js';
 
 export interface ParsedTransaction {
   time: string;
@@ -68,14 +69,14 @@ export function parseVcb(rawText: string): ParsedTransaction | null {
   const refMatch = normalized.match(/\bRef\s+(.*)$/i);
   const refSegment = refMatch ? refMatch[1].trim() : '';
 
-  const accountSafeText = normalized.replace(/\b\d{8,}\b/g, '***');
-  const safeRefSegment = refSegment.replace(/\b\d{8,}\b/g, '***');
+  const accountSafeText = maskSensitiveIdentifiers(normalized);
+  const safeRefSegment = maskSensitiveIdentifiers(refSegment);
   const description = refSegment ? safeRefSegment : accountSafeText;
   let counterparty = '';
 
   if (safeRefSegment) {
     const parts = safeRefSegment.split('.');
-    counterparty = parts.length > 2 ? parts.slice(2).join('.').trim() : refSegment;
+    counterparty = parts.length > 2 ? parts.slice(2).join('.').trim() : safeRefSegment;
   }
 
   const category = matchCategory(`${counterparty} ${description}`, type);

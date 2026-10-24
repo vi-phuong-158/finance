@@ -14,13 +14,14 @@ class ConnectionCheckWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val postedAt = System.currentTimeMillis()
         val event = PendingTransaction(
-            eventId = testEventId,
+            eventId = EventIdentity.createEventId("VCB", postedAt, TEST_TRANSACTION_TEXT),
             bank = "VCB",
             packageName = "com.VCB",
             title = "Finance Bridge connection check",
             text = TEST_TRANSACTION_TEXT,
-            postedAt = System.currentTimeMillis(),
+            postedAt = postedAt,
             state = TransactionOutbox.STATE_PENDING,
         )
 
@@ -52,7 +53,6 @@ class ConnectionCheckWorker(
         const val UNIQUE_WORK_NAME = "finance-bridge-connection-check"
         private const val TEST_TRANSACTION_TEXT =
             "Số dư TK VCB ACCOUNT-TEST +1,000 VND lúc 24-10-2026 11:15:00. Số dư 100,000 VND. Ref TEST.CONNECTION CHECK"
-        private val testEventId = BankNotificationListener.computeEventId("VCB", TEST_TRANSACTION_TEXT)
     }
 }
 

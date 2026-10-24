@@ -1,4 +1,6 @@
-import { createHash } from 'node:crypto';
+import { createEventId, normalizeTransactionText } from '../event-identity.js';
+import { maskSensitiveIdentifiers } from '../sensitive-identifiers.js';
+export { normalizeTransactionText } from '../event-identity.js';
 import { matchCategory } from '../categories.js';
 import { parseBidv } from '../parsers/bidv.js';
 import { parseVcb } from '../parsers/vcb.js';
@@ -36,16 +38,8 @@ const SENSITIVE_BLACKLIST = /\b(otp|smart\s*otp|soft\s*otp|ma\s*xac\s*thuc|ma\s*
 const MONEY_SIGNAL = /(?:\b(?:VND|VNĐ)\b|[+-]\s*\d[\d.,]{2,})/i;
 const ACCOUNT_SIGNAL = /\b(so\s*du|sd|tk|tai\s*khoan|gd|giao\s*dich|ps|phat\s*sinh|chuyen\s*khoan|thanh\s*toan)\b/i;
 
-export function normalizeTransactionText(value: string): string {
-  return value.normalize('NFC').replace(/[\r\n\t\u00a0]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
 function removeAccents(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
-}
-
-function createEventId(bank: Bank, normalizedText: string): string {
-  return createHash('sha256').update(`${bank}:${normalizedText}`, 'utf8').digest('hex').slice(0, 16);
 }
 
 function isBank(value: unknown): value is Bank {
@@ -112,7 +106,7 @@ async function validateAndProcessTransactionInternal(
     return { httpStatus: 400, body: { error: 'INVALID_PAYLOAD' } };
   }
 
-  if (!/^[a-f0-9]{16}$/.test(String(eventId)) || packageName !== BANK_PACKAGES[bank] || !isValidTimestamp(postedAt) || typeof dryRun !== 'boolean') {
+  if (!/^[a-f0-9]{64}$/.test(eventId) || packageName !== BANK_PACKAGES[bank] || !isValidTimestamp(postedAt) || typeof dryRun !== 'boolean') {
     return { httpStatus: 400, body: { error: 'INVALID_PAYLOAD' } };
   }
 
@@ -130,7 +124,7 @@ async function validateAndProcessTransactionInternal(
     return { httpStatus: 413, body: { error: 'PAYLOAD_TOO_LARGE' } };
   }
 
-  if (createEventId(bank, normalizedText) !== eventId) {
+  if (createEventId(bank, postedAt, normalizedText) !== eventId) {
     return { httpStatus: 400, body: { error: 'EVENT_ID_MISMATCH' } };
   }
 
@@ -174,7 +168,7 @@ async function validateAndProcessTransactionInternal(
     }
 
     const existingIds = await sheets.readEventIds();
-    if (existingIds.transactionIds.slice(-1000).includes(eventId) || existingIds.rawIds.slice(-1000).includes(eventId)) {
+    if (existingIds.transactionIds.includes(eventId) || existingIds.rawIds.includes(eventId)) {
       return { httpStatus: 200, body: { status: 'DUPLICATE_IGNORED', eventId } };
     }
 
@@ -186,8 +180,8 @@ async function validateAndProcessTransactionInternal(
         parsed.type,
         parsed.amount,
         parsed.balance,
-        parsed.counterparty,
-        parsed.description,
+        maskSensitiveIdentifiers(parsed.counterparty),
+        maskSensitiveIdentifiers(parsed.description),
         category,
         eventId,
       ]);
@@ -195,7 +189,7 @@ async function validateAndProcessTransactionInternal(
       return { httpStatus: 200, body: { status: 'SAVED_TRANSACTION', eventId } };
     }
 
-    const safeText = normalizedText.replace(/\b\d{8,}\b/g, '***');
+    const safeText = maskSensitiveIdentifiers(normalizedText);
     await sheets.appendRaw([formatReceivedTime(postedAt), bank, safeText, eventId]);
     return { httpStatus: 200, body: { status: 'SAVED_RAW_CAPTURE', eventId } };
   } catch {

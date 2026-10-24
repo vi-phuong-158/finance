@@ -90,10 +90,11 @@ class TransactionOutbox(context: Context) {
         )
     }
 
-    fun markAttempt(eventId: String) = update(eventId) {
-        put(COL_ATTEMPTS, it.getInt(COL_ATTEMPTS) + 1)
-        put(COL_ERROR, null as String?)
-        put(COL_UPDATED_AT, System.currentTimeMillis())
+    fun markAttempt(eventId: String) {
+        helper.writableDatabase.execSQL(
+            "UPDATE $TABLE SET $COL_ATTEMPTS = $COL_ATTEMPTS + 1, $COL_ERROR = NULL, $COL_UPDATED_AT = ? WHERE $COL_EVENT_ID = ?",
+            arrayOf(System.currentTimeMillis(), eventId),
+        )
     }
 
     fun markRetryable(eventId: String, errorCode: String) = update(eventId) {

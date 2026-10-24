@@ -10,7 +10,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 
 class UploadWorker(
     appContext: Context,
@@ -30,7 +29,7 @@ class UploadWorker(
             if (transaction.state in TERMINAL_STATES) return@withContext Result.success()
             if (transaction.state != TransactionOutbox.STATE_PENDING) return@withContext Result.failure()
 
-            if (computeEventId(transaction.bank, transaction.text) != eventId) {
+            if (EventIdentity.createEventId(transaction.bank, transaction.postedAt, transaction.text) != eventId) {
                 outbox.markBlocked(eventId, "EVENT_ID_MISMATCH")
                 return@withContext Result.failure()
             }
@@ -82,7 +81,7 @@ class UploadWorker(
         if (!SensitiveFilter.shouldProcess(title, text)) return null
 
         val normalized = SensitiveFilter.normalizeText(text)
-        val legacyId = computeEventId(bank, normalized)
+        val legacyId = EventIdentity.createEventId(bank, postedAt, normalized)
         if (legacyId != eventId || !postedAt.isValidPostedTime()) return null
 
         val transaction = PendingTransaction(
@@ -96,12 +95,6 @@ class UploadWorker(
         )
         if (!outbox.enqueueIfNewOrPending(transaction)) return null
         return outbox.get(eventId)
-    }
-
-    private fun computeEventId(bank: String, normalizedText: String): String {
-        val payload = "$bank:$normalizedText"
-        val digest = MessageDigest.getInstance("SHA-256").digest(payload.toByteArray(StandardCharsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }.take(16)
     }
 
     private fun Long.isValidPostedTime(): Boolean = this >= 0L && this <= MAX_POSTED_AT

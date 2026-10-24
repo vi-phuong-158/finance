@@ -6,7 +6,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 data class WebhookResponse(
@@ -78,17 +77,15 @@ object WebhookClient {
         else -> "NETWORK_UNAVAILABLE"
     }
 
-    companion object {
-        private val ERROR_CODE = Regex("[A-Z0-9_]{1,48}")
-        private val TERMINAL_STATUSES = setOf(
-            "SAVED_TRANSACTION",
-            "SAVED_RAW_CAPTURE",
-            "DUPLICATE_IGNORED",
-            "DROPPED_SENSITIVE",
-            "DROPPED_NON_TRANSACTION",
-        )
-        private val DRY_RUN_STATUSES = setOf("VALIDATED_TRANSACTION", "VALIDATED_RAW_CAPTURE")
-    }
+    private val ERROR_CODE = Regex("[A-Z0-9_]{1,48}")
+    private val TERMINAL_STATUSES = setOf(
+        "SAVED_TRANSACTION",
+        "SAVED_RAW_CAPTURE",
+        "DUPLICATE_IGNORED",
+        "DROPPED_SENSITIVE",
+        "DROPPED_NON_TRANSACTION",
+    )
+    private val DRY_RUN_STATUSES = setOf("VALIDATED_TRANSACTION", "VALIDATED_RAW_CAPTURE")
 }
 
 fun buildTransactionPayload(event: PendingTransaction, dryRun: Boolean = false): JSONObject = JSONObject().apply {

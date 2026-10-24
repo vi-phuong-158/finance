@@ -19,7 +19,7 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
 1. Vào thư mục `vercel/`:
    ```bash
    cd vercel
-   npm install
+   npm ci
    npm test
    npm run typecheck
    ```
@@ -37,7 +37,26 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
    WEBHOOK_URL=https://ten-project-cua-ban.vercel.app/api/transaction
    WEBHOOK_SECRET=mat-khau-bi-mat-tu-chon
    ```
-3. Checkout hiện chưa có Gradle Wrapper (`gradlew`/`gradlew.bat`), nên chưa thể build APK trực tiếp từ hướng dẫn này. Cần bổ sung wrapper tương thích và Android SDK/JDK trước khi build. Bản release yêu cầu URL HTTPS và secret riêng đã được cấu hình; bản debug để trống sẽ không gửi webhook. Phần Android hiện đã có mã outbox SQLite và retry nhưng chưa được biên dịch hoặc nghiệm thu trên thiết bị.
+3. Checkout có Gradle Wrapper 8.7, pin checksum bản phân phối và wrapper JAR đã được đối chiếu checksum chính thức. Chuẩn bị JDK 17, Android SDK platform 34 và build-tools 34.0.0; đặt `ANDROID_HOME` tới SDK, rồi chạy:
+   ```bash
+   cd android
+   ./gradlew assembleDebug testDebugUnitTest
+   ```
+   Trên Windows dùng `gradlew.bat assembleDebug testDebugUnitTest`. Không cần cài Gradle toàn cục. Cấu hình giữ AGP 8.5.2, Kotlin 1.9.24 và Compose Compiler 1.5.14. Bản debug không cần webhook/secret và sẽ chuyển sự kiện sang `BLOCKED` nếu chưa cấu hình; bản release yêu cầu HTTPS và secret riêng. Không commit APK hoặc `local.properties`.
+
+## Hợp đồng sự kiện và bảo vệ dữ liệu
+
+`eventId` là đầy đủ 64 ký tự hex thường của SHA-256 trên UTF-8 `bank:postedAt:normalizedText`. `postedAt` là số nguyên epoch milliseconds gốc từ notification, giữ nguyên trong SQLite qua mọi lần retry. Android và backend chạy cùng bộ vector ở `shared/event-id-vectors.tsv`, gồm NFC/NFD và các khoảng trắng Unicode. Nội dung giống nhau ở thời điểm khác nhau tạo hai ID khác nhau. Server từ chối ID không khớp.
+
+Đây là thay đổi giao thức trước rollout: APK và backend phải được nâng đồng bộ. Không tự viết lại ID của outbox cũ hoặc Sheet cũ; các bản ghi pending dùng ID 16 ký tự sẽ bị chặn `EVENT_ID_MISMATCH`, vẫn giữ payload cục bộ. Nếu đã thử bản nền cũ, cần xử lý/đối soát hết hàng đợi với backend cũ trước khi nâng. Không phát lại dữ liệu đã ghi dưới thuật toán cũ sang thuật toán mới.
+
+Backend che identifier có từ 8 chữ số, liền nhau hoặc ngăn bằng space/NBSP/dấu `-`, trước khi ghi `Raw_Capture.raw_text`, `Transactions.description` và `counterparty`. Các giá trị có đơn vị tiền, token ngày/giờ và cột amount/balance/event_id được giữ nguyên. Đây là quy tắc xác định cho format MVP, không phải bộ nhận diện mọi dữ liệu cá nhân.
+
+Dedup đọc toàn bộ cột ID của cả hai tab; không còn cửa sổ 1.000 dòng. Đọc và append vẫn là hai thao tác: request đồng thời có thể ghi trùng. Mutex Android tuần tự hóa upload trong một tiến trình, không thay thế khóa nguyên tử phía Sheets.
+
+## Kiểm tra tự động
+
+Workflow `.github/workflows/ci.yml` chạy `npm ci`, `npm test`, `npm run typecheck` trên Node 24.11.0 và `assembleDebug testDebugUnitTest` trên JDK 17/Android SDK 34. Debug CI không dùng dữ liệu hoặc secret thật. Build và unit test không thay thế E2E điện thoại hoặc thử Google Sheets production.
 
 ### Bước 3: Cấp quyền một lần trên điện thoại
 1. Nếu dùng Android 13/14/15+: Vào `Cài đặt -> Ứng dụng -> Đồng Bộ Thu Chi -> Menu 3 chấm góc phải -> Cho phép cài đặt bị hạn chế (Allow restricted settings)`.

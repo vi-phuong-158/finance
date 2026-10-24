@@ -34,7 +34,7 @@ System Flag Filter (Bỏ qua FLAG_GROUP_SUMMARY & FLAG_ONGOING_EVENT)
 SensitiveFilter (Chặn OTP + Bảo mật/Thẻ/Đăng nhập + Kiểm tra dấu hiệu giao dịch)
      │
      ▼
-Chuẩn hóa normalizedText & Tính event_id = SHA256(bank + ":" + normalizedText)
+Chuẩn hóa normalizedText & Tính event_id = SHA256(bank + ":" + postedAt + ":" + normalizedText)
      │
      ▼
 SQLite Outbox cục bộ: INSERT OR IGNORE theo eventId
@@ -46,7 +46,7 @@ Unique WorkManager: enqueueUniqueWork("bank-$eventId", KEEP, input chỉ gồm e
 Vercel Serverless (POST /api/transaction)
  ├─ 1. Kiểm tra secret, schema input, bank/package và event_id
  ├─ 2. Lọc OTP và xác nhận dấu hiệu giao dịch
- ├─ 3. Chống trùng theo 1.000 dòng gần nhất
+ ├─ 3. Chống trùng theo toàn bộ cột event_id của hai tab
  ├─ 4. Chạy parser và phân loại giao dịch
  └─ 5. Ghi đúng 9/4 cột bằng RAW, trả status nghiệp vụ
      │
@@ -145,11 +145,11 @@ Mọi thông báo từ ứng dụng khác (Zalo, Messenger, Gmail, Telegram, SMS
 
 1. **Công thức tính `event_id` trên Android:**
 
-   * Tính băm `SHA-256` trên chuỗi UTF-8: `"$bank:$normalizedText"`.
+   * Tính băm `SHA-256` trên chuỗi UTF-8: `"$bank:$postedAt:$normalizedText"`. `postedAt` là epoch milliseconds nguyên từ `sbn.postTime`, lưu một lần trong SQLite và giữ nguyên khi retry.
 
-   * Lấy **16 ký tự hex đầu tiên** (viết thường) làm `eventId` (ví dụ: `"8fa09d12c4e8b7a1"`).
+   * Lấy **đầy đủ 64 ký tự hex thường** làm `eventId`. Android và backend kiểm tra cùng bộ vector cố định tại `shared/event-id-vectors.tsv`.
 
-   * *Lưu ý:* Không đưa `sbn.postTime` vào công thức băm để tránh trường hợp Android cập nhật lại thông báo với `postTime` mới gây lọt bản trùng. Bản thân `normalizedText` của ngân hàng đã chứa thời gian giao dịch và số dư sau giao dịch.
+   * Cùng bank/text/postedAt tạo cùng ID; postedAt khác tạo ID khác dù nội dung giống nhau. Android cập nhật notification với postTime mới được xem là sự kiện khác; không suy đoán đây là cùng giao dịch. Đây là thay đổi giao thức trước rollout, cần nâng APK/backend đồng bộ và đối soát hàng đợi/Sheet cũ theo hướng dẫn README.
 
 2. **Ghi payload vào SQLite trước khi lập lịch:** `event_id` là khóa duy nhất; `INSERT OR IGNORE` bảo vệ sự kiện đã tồn tại. Chỉ sau khi lưu thành công mới enqueue WorkManager với input gồm eventId. Khi app mở hoặc notification listener khởi động lại, quét payload đang chờ để lập lịch tác vụ còn thiếu.
 
@@ -169,7 +169,7 @@ Mọi thông báo từ ứng dụng khác (Zalo, Messenger, Gmail, Telegram, SMS
 
    * Retry dùng chính payload cục bộ gắn với eventId. Lỗi mạng/server tạm thời được retry; lỗi cấu hình chuyển sang `BLOCKED` và có thể gửi lại từ app.
 
-   * Một `Mutex` chỉ cho phép một upload worker hoạt động trong tiến trình ứng dụng. Chống trùng phía Sheets vẫn chỉ áp dụng trong cửa sổ lịch sử; không khẳng định request đồng thời trên server ghi nguyên tử.
+   * Một `Mutex` chỉ cho phép một upload worker hoạt động trong tiến trình ứng dụng. Chống trùng phía Sheets đọc toàn bộ lịch sử hai tab; không khẳng định request đồng thời trên server ghi nguyên tử.
 
    * Khi có kết quả kết thúc, xóa title/text khỏi SQLite và giữ eventId cùng mã trạng thái 30 ngày.
 
@@ -197,7 +197,7 @@ Payload JSON nhận từ Android APK:
 
 ```
 {
-  "eventId": "8fa09d12c4e8b7a1",
+  "eventId": "f951297f84a41a6910d1a872eacf8d760051820fca47bd1c087bc66d7c52ff6f",
   "bank": "VCB",
   "packageName": "com.VCB",
   "title": "Thông báo VCB",
@@ -217,13 +217,13 @@ Quy trình xử lý tại `api/transaction.ts` và `api/transaction-service.ts`:
 
 4. **Dry-run kiểm tra Sheet:** So sánh header của hai tab; trả `VALIDATED_TRANSACTION` hoặc `VALIDATED_RAW_CAPTURE`; không append.
 
-5. **Kiểm tra chống trùng thực tế trên Google Sheets (1.000 dòng gần nhất):**
+5. **Kiểm tra chống trùng thực tế trên Google Sheets (toàn bộ lịch sử):**
 
-   * Đọc cột `I` (`event_id`) của tối đa **1.000 dòng cuối cùng** trong tab `Transactions` (và cột `D` của tab `Raw_Capture` nếu cần).
+   * Đọc toàn bộ cột `I` (`event_id`) của tab `Transactions` và cột `D` của tab `Raw_Capture`. Kiểm tra tất cả ID trả về, không cắt cửa sổ.
 
    * Nếu `eventId` đã tồn tại ➔ trả về ngay `200 OK` (`status: "DUPLICATE_IGNORED"`).
 
-   * *Ghi chú phạm vi:* Đây là chống trùng tốt nhất trong cửa sổ Sheet, không phải cơ chế append nguyên tử; hai request đồng thời vẫn cần đối soát.
+   * *Ghi chú phạm vi:* Đây là chống phát lại tuần tự trên toàn lịch sử, không phải cơ chế append nguyên tử; hai request đồng thời vẫn cần đối soát.
 
 6. **Chạy Parser ngân hàng tương ứng:**
 
@@ -231,7 +231,7 @@ Quy trình xử lý tại `api/transaction.ts` và `api/transaction-service.ts`:
 
    * **Trường hợp 1 — Parse thành công:** Gán danh mục qua `categories.ts`, dùng `RAW` để append 9 cột và trả `SAVED_TRANSACTION`.
 
-   * **Trường hợp 2 — Parser chưa hiểu format:** Che chuỗi số 8–16 chữ số, dùng `RAW` để append 4 cột và trả `SAVED_RAW_CAPTURE`.
+   * **Trường hợp 2 — Parser chưa hiểu format:** `maskSensitiveIdentifiers` che chuỗi từ 8 chữ số, liền nhau hoặc có space/NBSP/dấu `-`; bảo toàn token tiền có đơn vị và ngày/giờ. Dùng `RAW` append 4 cột và trả `SAVED_RAW_CAPTURE`. Cùng hàm che được áp dụng cho description/counterparty trước mọi lần ghi Transactions; amount/balance và event_id không qua masking.
 
 ### 5.2. Đặc tả Parser Đầu tiên: `parsers/vcb.ts`
 
@@ -307,7 +307,7 @@ export function matchCategory(text: string, type: 'THU' | 'CHI'): string {
 | **F** | `counterparty` | `TEST SUPERMARKET` | Đối tác / Đơn vị nhận hoặc gửi | 
 | **G** | `description` | `GoVietTri124...` | Nội dung giao dịch / Mã tham chiếu | 
 | **H** | `category` | `Siêu thị` | Danh mục (`Siêu thị`, `Cafe`, `Chuyển nội bộ`, `Chưa phân loại`...) | 
-| **I** | `event_id` | `8fa09d12c4e8b7a1` | Mã băm `SHA256(bank + ":" + normalizedText)` (16 ký tự hex) | 
+| **I** | `event_id` | SHA-256 hex | Mã băm `SHA256(bank + ":" + postedAt + ":" + normalizedText)` (64 ký tự hex) |
 
 ### 6.2. Tab 2: `Raw_Capture` (4 cột: A ➔ D)
 
@@ -337,7 +337,7 @@ Không quy định cứng thời gian theo phút; chỉ chuyển sang bước ti
 
   1. Chuẩn bị Sheet thử riêng với header theo schema hiện có và cấp quyền tối thiểu cho Service Account.
 
-  2. Viết `categories.ts`, `parsers/vcb.ts`, và `api/transaction.ts` (tích hợp kiểm tra `WEBHOOK_SECRET` và kiểm tra trùng `event_id` trên 1.000 dòng gần nhất).
+  2. Viết `categories.ts`, `parsers/vcb.ts`, và `api/transaction.ts` (tích hợp kiểm tra `WEBHOOK_SECRET` và kiểm tra trùng `event_id` trên toàn bộ hai cột ID).
 
 * **Điều kiện nghiệm thu Bước 1 (Gate 1):**
 
@@ -361,7 +361,7 @@ Không quy định cứng thời gian theo phút; chỉ chuyển sang bước ti
 
   * Kiểm thử `SensitiveFilter`: Các thông báo chứa chữ `OTP`, `Mã xác thực`, `Đăng nhập thiết bị mới`, hoặc thông báo quảng cáo không có số tiền đều bị chặn hoàn toàn, không gửi request nào lên Vercel.
 
-  * Bật Airplane Mode, phát notification thử, xác nhận đã vào SQLite; tắt chế độ máy bay ➔ worker gửi và cập nhật trạng thái. Phát lại cùng event không append dòng thứ hai trong cửa sổ kiểm tra.
+  * Bật Airplane Mode, phát notification thử, xác nhận đã vào SQLite; tắt chế độ máy bay ➔ worker gửi và cập nhật trạng thái. Phát lại cùng event không append dòng thứ hai dù ID nằm ngoài 1.000 dòng cuối.
 
 ### Bước 3: Vận hành Thực tế VCB & Mở rộng Parser VietinBank / BIDV
 
