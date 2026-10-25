@@ -11,20 +11,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
+/**
+ * Legacy name retained for source compatibility. The default treatment is now an opaque
+ * white/surface card with a soft border, matching the app reference. Use transparency only
+ * for deliberate accents such as the hero card, never as the default visual language.
+ */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = FinanceTheme.shapes.xLarge,
     borderWidth: Dp = 1.dp,
     elevation: Dp = FinanceTheme.spacing.elevationLow,
-    containerColor: Color = FinanceTheme.colors.surfaceGlass,
+    containerColor: Color = FinanceTheme.colors.surfaceCard,
     borderColor: Color = FinanceTheme.colors.borderGlass,
     contentPadding: Dp = 16.dp,
     content: @Composable BoxScope.() -> Unit,
@@ -34,8 +38,8 @@ fun GlassCard(
             .shadow(
                 elevation = elevation,
                 shape = shape,
-                ambientColor = Color(0x0A000000),
-                spotColor = Color(0x142F8F63),
+                ambientColor = Color(0x08000000),
+                spotColor = Color(0x1008A9D6),
             )
             .clip(shape)
             .background(containerColor)
@@ -63,11 +67,11 @@ fun FinanceCard(
                 elevation = elevation,
                 shape = shape,
                 ambientColor = Color(0x05000000),
-                spotColor = Color(0x0F123126),
+                spotColor = Color(0x0D08A9D6),
             ),
         shape = shape,
         color = containerColor,
-        border = BorderStroke(1.dp, FinanceTheme.colors.borderGlass.copy(alpha = 0.4f)),
+        border = BorderStroke(1.dp, FinanceTheme.colors.borderGlass),
     ) {
         Box(
             modifier = Modifier.padding(contentPadding),
