@@ -136,9 +136,11 @@ fun RecordScreen(
             color = FinanceTheme.colors.textSecondary,
         )
 
+        // Backend V3.1 does not persist manual entries yet. Keep the UI visible for review,
+        // but never imply a successful financial write before the API exists.
         PrimaryButton(
-            text = "Lưu giao dịch",
-            enabled = (amountText.toLongOrNull() ?: 0L) > 0L,
+            text = "Lưu giao dịch (sắp hỗ trợ)",
+            enabled = false,
             onClick = {
                 onSave(
                     type,
@@ -150,7 +152,7 @@ fun RecordScreen(
         )
 
         Text(
-            text = "Ghi tay hiện đang ở lớp giao diện; luồng tự động từ thông báo ngân hàng vẫn hoạt động độc lập.",
+            text = "Chức năng ghi tay chưa được kết nối lưu dữ liệu. Giao dịch tự động từ thông báo ngân hàng vẫn hoạt động độc lập.",
             style = FinanceTheme.typography.caption,
             color = FinanceTheme.colors.textMuted,
         )
