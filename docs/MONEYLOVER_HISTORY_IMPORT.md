@@ -29,11 +29,12 @@ rejection of Excel's nonexistent 1900-02-29. Fractional serials/timestamps are r
 rather than silently losing a transaction time. Source text is preserved.
 `original_no` and `member` retain source provenance; neither appears in the API.
 
-VND has `amount_vnd = amount`. Other currencies retain their original amount and
-have blank `amount_vnd` (API `null`). There is no exchange-rate lookup. A future
-conversion needs transaction-specific evidence and a separately reviewed change.
-VND and JPY require integer amounts; other currencies currently support at most
-two decimal places and are never implicitly treated as VND.
+Money Lover historical transactions admitted into the system are strictly VND consumption
+records. Any row with `currency != VND` (such as JPY foreign exchange) is excluded by
+policy. Non-consumption financial categories (`Cho vay`, `Trả lãi`, and potential loan/debt
+categories `Vay`, `Đi vay`, `Trả nợ`, `Thu nợ`) are filtered out from history.
+Legitimate income categories (`Lương`, `Thu nhập khác`, `Tiền chuyển đến`) that are not
+loans or debts remain admitted.
 
 Exclusion uses an explicit allowlist: blank/false/0/no/không → false;
 true/1/yes/có/x/✅ → true (text is case insensitive). Unknown flags are rejected.
@@ -49,6 +50,7 @@ From `vercel/`, use a private source path and a new report path outside tracked 
 ```powershell
 npm run moneylover:import -- --file "C:/private/history.xlsx" --report "C:/private/source-report.json"
 npm run moneylover:import -- --file "C:/private/history.xlsx" --check-sheets --report "C:/private/sheets-plan.json"
+npm run moneylover:import -- --file "C:/private/history.xlsx" --cleanup --apply --report "C:/private/cleanup-report.json"
 npm run moneylover:import -- --file "C:/private/history.xlsx" --expectations "C:/private/expected.json" --apply --report "C:/private/applied.json"
 ```
 
@@ -81,9 +83,8 @@ modified to force a match. Without expectations, reconciliation is explicitly
 `EXPECTATIONS_NOT_PROVIDED`, not a successful acceptance check.
 
 Compare source row count, date bounds, THU/CHI, currency, wallet and category counts;
-original totals per currency; category VND expense totals; and eligible report VND
-totals. These are different measures: excluded rows still belong to original totals;
-unconverted foreign currency belongs only to its own currency totals. Preserve the
+category VND expense totals; and eligible report VND totals. Non-VND and non-consumption
+rows are excluded by policy during source parsing and cleanup. Preserve the
 source SHA-256 and private report as the import evidence.
 
 ## Duplicate protection and recovery
@@ -149,8 +150,7 @@ date-only records have `time:null,datePrecision:DAY` and no inferred midnight.
 Their within-day order is deterministic and is not a claim about transaction time.
 
 Internal transfers and exclusion flags remain visible in history but are omitted
-from report income/expense/net. Unconverted rows are counted separately with totals
-in their original currencies. Category/account summaries use the same eligibility
+from report income/expense/net. Category/account summaries use the same eligibility
 rules. `transactionCount` includes all filtered rows; `includedTransactionCount`
 counts those used in the VND totals. `lastUpdatedAt` means API read time, not the
 source's last modification time. No balance is invented for historical wallets.

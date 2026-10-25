@@ -1,5 +1,10 @@
 import { minorUnits, parseBoolean, validDate } from './schema.js';
 import type { MoneyLoverTransaction } from './schema.js';
+import { isNonConsumptionCategory } from '../categories.js';
+
+export function isExcludedHistoryRow(t: { currency: string; category: string }): boolean {
+  return t.currency !== 'VND' || isNonConsumptionCategory(t.category);
+}
 
 export function readHistoryRow(row: unknown[]): MoneyLoverTransaction {
   const [id, date, type, amount, currency, vnd, category, wallet, note, party, event, excluded, source, originalNo, member] = row;
@@ -17,7 +22,7 @@ export function readHistoryRow(row: unknown[]): MoneyLoverTransaction {
     || typeof date !== 'string' || !validDate(date) || (type !== 'THU' && type !== 'CHI')
     || typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency) || source !== 'MONEYLOVER') throw new Error('INVALID_HISTORY_ROW');
   const originalAmount = money(amount);
-  if (originalAmount === 0 || (['VND', 'JPY'].includes(currency) && !Number.isInteger(originalAmount))) throw new Error('INVALID_HISTORY_ROW');
+  if (originalAmount === 0 || (currency === 'VND' && !Number.isInteger(originalAmount))) throw new Error('INVALID_HISTORY_ROW');
   const amountVnd = vnd === '' || vnd === undefined || vnd === null ? null : money(vnd);
   if (amountVnd !== null && !Number.isSafeInteger(amountVnd)) throw new Error('INVALID_HISTORY_ROW');
   if (currency === 'VND' && amountVnd !== originalAmount) throw new Error('INVALID_HISTORY_ROW');

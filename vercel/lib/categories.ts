@@ -42,6 +42,15 @@ export function normalizeCategoryText(text: string): string {
 export function canonicalBankCategory(name: string): string {
   return CATEGORY_REGISTRY.find((c) => c.name === name || c.aliases.includes(name))?.name ?? name;
 }
+export const NON_CONSUMPTION_CATEGORIES = [
+  'Cho vay', 'Trả lãi', 'Vay', 'Đi vay', 'Trả nợ', 'Thu nợ',
+] as const;
+
+export function isNonConsumptionCategory(category: string): boolean {
+  const norm = normalizeCategoryText(category);
+  return NON_CONSUMPTION_CATEGORIES.some((c) => normalizeCategoryText(c) === norm);
+}
+
 export function matchCategory(text: string, type: 'THU' | 'CHI'): string {
   const normalized = ` ${normalizeCategoryText(text)} `;
   const internal = CATEGORY_REGISTRY.find((c) => c.id === 'internal-transfer')!;

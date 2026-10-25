@@ -30,7 +30,7 @@ test('registry preserves 34 user categories and scopes keyword rules to income/e
   assert.equal(matchCategory('BIDV VCB', 'CHI'), 'Chưa phân loại');
   assert.equal(matchCategory('LOTTE CINEMA', 'CHI'), 'Giải trí');
 });
-test('unified model preserves date-only, foreign currencies and every candidate duplicate', () => {
+test('unified model preserves date-only VND transactions, masks details and detects candidate duplicates', () => {
   const snapshot = financeFixture(), before = structuredClone(snapshot), rows = fromFinanceSnapshot(snapshot);
   assert.equal(rows.length, 6); assert.deepEqual(snapshot, before);
   const historical = rows.find((r) => r.source === 'MONEYLOVER' && r.category === 'Cafe')!;
@@ -39,20 +39,18 @@ test('unified model preserves date-only, foreign currencies and every candidate 
   assert.equal(rows.filter((r) => r.possibleDuplicate).length, 2);
   const bank = rows.find((r) => r.bank === 'VCB')!;
   assert.equal(bank.time, '2026-02-28T13:22:00+07:00'); assert.equal(bank.datePrecision, 'MINUTE');
-  assert.equal(rows.find((r) => r.currency === 'JPY')!.amountVnd, null);
+  assert.equal(rows.find((r) => r.category === 'Thu nhập khác')!.currency, 'VND');
   assert.equal(JSON.stringify(rows).includes('Member A'), false);
 });
-test('dashboard excludes internal transfers, excluded source rows and unconverted JPY from VND totals', () => {
+test('dashboard excludes internal transfers and excluded source rows from VND totals', () => {
   const rows = fromFinanceSnapshot(financeFixture()), q = parseFinanceQuery({ month: '2026-02' }, true);
   const d = buildDashboard(rows, q, new Date('2026-03-01T00:00:00Z'));
-  assert.equal(d.income, 100000); assert.equal(d.expense, 25000); assert.equal(d.net, 75000);
-  assert.equal(d.transactionCount, 6); assert.equal(d.includedTransactionCount, 3);
-  assert.equal(d.excludedTransactionCount, 2); assert.equal(d.unconvertedTransactionCount, 1);
-  assert.equal(d.unconvertedByCurrency.JPY.income, 600000); assert.equal(d.possibleDuplicateCount, 2);
+  assert.equal(d.income, 160000); assert.equal(d.expense, 25000); assert.equal(d.net, 135000);
+  assert.equal(d.transactionCount, 6); assert.equal(d.includedTransactionCount, 4);
+  assert.equal(d.excludedTransactionCount, 2);
+  assert.equal(d.possibleDuplicateCount, 2);
   assert.equal(d.categorySummary.find((c) => c.name === 'Chuyển nội bộ')!.expense, 0);
   assert.equal(d.accountSummary.find((a) => a.name === 'Wallet A')!.expense, 12500);
-  const converted = structuredClone(rows); converted.find((t) => t.currency === 'JPY')!.amountVnd = 90000000;
-  assert.equal(buildDashboard(converted, q).income, 90100000);
 });
 test('date periods include leap days and use Vietnam timezone for the default current month', () => {
   const current = parseFinanceQuery({}, true, new Date('2026-01-31T18:00:00Z'));

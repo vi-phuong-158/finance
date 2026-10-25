@@ -44,5 +44,27 @@ export async function makeHistoryImportPort(config: GoogleConfiguration): Promis
       await sheets.spreadsheets.batchUpdate({ spreadsheetId,
         requestBody: { requests: historyAppendRequests(rows, sheetId, create) } }, { retry: false });
     },
+    async replaceHistory(rows) {
+      if (sheetId === undefined) throw new Error('HISTORY_SCHEMA_MISMATCH');
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: `'${HISTORY_TAB}'!A2:P50001`,
+      });
+      const values = rows.map((row) => ({
+        values: row.map((v) => ({
+          userEnteredValue: typeof v === 'number' ? { numberValue: v }
+            : typeof v === 'boolean' ? { boolValue: v }
+            : { stringValue: String(v ?? '') },
+        })),
+      }));
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            { appendCells: { sheetId, rows: values, fields: 'userEnteredValue' } },
+          ],
+        },
+      }, { retry: false });
+    },
   };
 }

@@ -1,10 +1,25 @@
 import { canonicalContent, legacyIdentity } from './identity.js';
 import { minorUnits, parseBoolean, validDate } from './schema.js';
 import type { MoneyLoverTransaction } from './schema.js';
+import { isNonConsumptionCategory } from '../categories.js';
 
 export type SourceRow = { rowNumber: number; cells: unknown[] };
 export type SourceTable = { rows: SourceRow[]; date1904?: boolean };
-export type ParseResult = { transactions: MoneyLoverTransaction[]; rejected: { row: number; code: string }[]; identicalRows: number };
+export type ExclusionReason = 'CURRENCY_NOT_VND' | 'NON_CONSUMPTION_CATEGORY';
+export type ExcludedRow = {
+  row: number;
+  reason: ExclusionReason;
+  category: string;
+  currency: string;
+  wallet: string;
+  amount: number;
+};
+export type ParseResult = {
+  transactions: MoneyLoverTransaction[];
+  rejected: { row: number; code: string }[];
+  excluded: ExcludedRow[];
+  identicalRows: number;
+};
 const ALIASES: Record<string, string[]> = {
   date: ['Ngày', 'Date'], category: ['Nhóm', 'Category'], amount: ['Số tiền', 'Amount'],
   currency: ['Đơn vị tiền tệ', 'Tiền tệ', 'Currency'], wallet: ['Ví', 'Wallet'],
@@ -48,7 +63,7 @@ export function parseMoneyLover(table: SourceTable): ParseResult {
     columns.set(key, i);
   }
   if (REQUIRED.some((key) => !columns.has(key))) throw new Error('INVALID_MONEYLOVER_HEADERS');
-  const result: ParseResult = { transactions: [], rejected: [], identicalRows: 0 };
+  const result: ParseResult = { transactions: [], rejected: [], excluded: [], identicalRows: 0 };
   const occurrences = new Map<string, number>();
   for (const row of nonempty.slice(1)) {
     try {
@@ -65,11 +80,38 @@ export function parseMoneyLover(table: SourceTable): ParseResult {
       minorUnits(signed);
       const currency = stringCell(cell('currency')).trim().toUpperCase();
       if (!/^[A-Z]{3}$/.test(currency)) throw new Error('INVALID_CURRENCY');
-      if (['VND', 'JPY'].includes(currency) && !Number.isSafeInteger(signed)) throw new Error('INVALID_MINOR_UNIT');
+      if (currency === 'VND' && !Number.isSafeInteger(signed)) throw new Error('INVALID_MINOR_UNIT');
+      const category = stringCell(cell('category'));
+      const wallet = stringCell(cell('wallet'));
+
+      if (currency !== 'VND') {
+        result.excluded.push({
+          row: row.rowNumber,
+          reason: 'CURRENCY_NOT_VND',
+          category,
+          currency,
+          wallet,
+          amount: signed,
+        });
+        continue;
+      }
+
+      if (isNonConsumptionCategory(category)) {
+        result.excluded.push({
+          row: row.rowNumber,
+          reason: 'NON_CONSUMPTION_CATEGORY',
+          category,
+          currency,
+          wallet,
+          amount: signed,
+        });
+        continue;
+      }
+
       const t: Omit<MoneyLoverTransaction, 'legacyId'> = {
         date: sourceDate(cell('date'), table.date1904 ?? false), type: signed < 0 ? 'CHI' : 'THU',
-        amount: Math.abs(signed), currency, amountVnd: currency === 'VND' ? Math.abs(signed) : null,
-        category: stringCell(cell('category')), wallet: stringCell(cell('wallet')), note: stringCell(cell('note')),
+        amount: Math.abs(signed), currency: 'VND', amountVnd: Math.abs(signed),
+        category, wallet, note: stringCell(cell('note')),
         counterparty: stringCell(cell('counterparty')), event: stringCell(cell('event')),
         excludedFromReport: parseBoolean(cell('excluded')), source: 'MONEYLOVER',
         originalNo: stringCell(cell('originalNo')), member: stringCell(cell('member')),

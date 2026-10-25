@@ -1,14 +1,16 @@
 import { createHash } from 'node:crypto';
 import { hasExpectedHeaders } from '../sheet-schema.js';
 import { canonicalContent } from './identity.js';
-import { readHistoryRow } from './history-reader.js';
+import { isExcludedHistoryRow, readHistoryRow } from './history-reader.js';
 import { HISTORY_HEADERS, historyRow } from './schema.js';
+import type { MoneyLoverTransaction } from './schema.js';
 import type { ParseResult } from './parser.js';
 
 export type HistorySnapshot = { exists: boolean; headers: unknown[]; rows: unknown[][] };
 export type ImportPort = {
   readHistory: () => Promise<HistorySnapshot>;
   appendHistory: (rows: unknown[][], create: boolean) => Promise<void>;
+  replaceHistory?: (rows: unknown[][]) => Promise<void>;
 };
 export function snapshotHash(snapshot: HistorySnapshot): string {
   return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
@@ -21,6 +23,7 @@ export function planImport(parsed: ParseResult, snapshot: HistorySnapshot) {
   for (const row of snapshot.rows.filter((r) => r.some((v) => v !== '' && v !== null && v !== undefined))) {
     const t = readHistoryRow(row);
     if (existing.has(t.legacyId)) throw new Error('DUPLICATE_HISTORY_ID');
+    if (isExcludedHistoryRow(t)) continue;
     existing.set(t.legacyId, canonicalContent(t));
   }
   const ids = new Set<string>();
@@ -32,6 +35,52 @@ export function planImport(parsed: ParseResult, snapshot: HistorySnapshot) {
     return old === undefined;
   });
   return { pending, skipped: parsed.transactions.length - pending.length, create: !snapshot.exists };
+}
+
+export type CleanupPlan = {
+  toRemove: MoneyLoverTransaction[];
+  toKeep: unknown[][];
+  removedRows: { rowId: string; category: string; currency: string; amount: number; reason: string }[];
+};
+
+export function planCleanup(snapshot: HistorySnapshot): CleanupPlan {
+  if (!snapshot.exists || !hasExpectedHeaders(snapshot.headers, HISTORY_HEADERS)) {
+    throw new Error('HISTORY_SCHEMA_MISMATCH');
+  }
+  const toRemove: MoneyLoverTransaction[] = [];
+  const toKeep: unknown[][] = [];
+  const removedRows: CleanupPlan['removedRows'] = [];
+  for (const row of snapshot.rows.filter((r) => r.some((v) => v !== '' && v !== null && v !== undefined))) {
+    const t = readHistoryRow(row);
+    if (isExcludedHistoryRow(t)) {
+      toRemove.push(t);
+      const reason = t.currency !== 'VND' ? 'CURRENCY_NOT_VND' : 'NON_CONSUMPTION_CATEGORY';
+      removedRows.push({ rowId: t.legacyId, category: t.category, currency: t.currency, amount: t.amount, reason });
+    } else {
+      toKeep.push(row);
+    }
+  }
+  return { toRemove, toKeep, removedRows };
+}
+
+export async function cleanupImportedHistory(port: ImportPort, apply = false) {
+  const before = await port.readHistory();
+  const plan = planCleanup(before);
+  const base = {
+    totalBefore: before.rows.filter((r) => r.some((v) => v !== '' && v !== null && v !== undefined)).length,
+    removedCount: plan.toRemove.length,
+    remainingCount: plan.toKeep.length,
+    removedRows: plan.removedRows,
+  };
+  if (!apply) return { ...base, status: 'DRY_RUN_CLEANUP' };
+  if (!plan.toRemove.length) return { ...base, status: 'ALREADY_CLEAN' };
+  if (snapshotHash(await port.readHistory()) !== snapshotHash(before)) throw new Error('HISTORY_CHANGED_RETRY_DRY_RUN');
+  if (!port.replaceHistory) throw new Error('REPLACE_HISTORY_NOT_SUPPORTED');
+  await port.replaceHistory(plan.toKeep);
+  const after = await port.readHistory();
+  const check = planCleanup(after);
+  if (check.toRemove.length) throw new Error('CLEANUP_READBACK_MISMATCH');
+  return { ...base, status: 'CLEANED_UP' };
 }
 
 export async function importMoneyLover(parsed: ParseResult, port: ImportPort, apply = false) {

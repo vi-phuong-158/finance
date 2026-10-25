@@ -14,8 +14,10 @@ export function sourceRow(overrides: Record<number, unknown> = {}): unknown[] {
 }
 export function financeFixture() {
   const parsed = parseMoneyLover(sourceTable(
-    sourceRow(), sourceRow({ 0: 2, 3: 600000, 4: 'JPY', 5: 'Wallet JPY', 2: 'Thu nhập khác' }),
-    sourceRow({ 0: 3, 3: -30000, 2: 'Cho vay', 9: '✅' }), sourceRow({ 0: 4, 3: 100000, 2: 'Lương' }),
+    sourceRow(),
+    sourceRow({ 0: 2, 3: 60000, 4: 'VND', 5: 'Wallet B', 2: 'Thu nhập khác' }),
+    sourceRow({ 0: 3, 3: -30000, 4: 'VND', 5: 'Wallet A', 2: 'Ăn uống', 9: '✅' }),
+    sourceRow({ 0: 4, 3: 100000, 4: 'VND', 5: 'Wallet A', 2: 'Lương' }),
   ));
   return { bank: [TRANSACTION_HEADERS,
     ['28/02/2026 13:22', 'VCB', 'CHI', 12500, 50000, 'Merchant A', 'Cafe', 'Cafe', '1'.repeat(64)],

@@ -4,16 +4,17 @@ import { readGoogleConfiguration } from '../lib/configuration.js';
 import { readMoneyLoverXlsx } from '../lib/moneylover/xlsx-reader.js';
 import { parseMoneyLover } from '../lib/moneylover/parser.js';
 import { summarizeSource, reconcileSource } from '../lib/moneylover/report.js';
-import { importMoneyLover } from '../lib/moneylover/importer.js';
+import { cleanupImportedHistory, importMoneyLover } from '../lib/moneylover/importer.js';
 import { makeHistoryImportPort } from '../lib/moneylover/google-history.js';
 
 async function main() {
   const args = process.argv.slice(2);
-  let file = process.env.MONEYLOVER_SOURCE_FILE ?? '', reportPath = '', expectationsPath = '', apply = false, checkSheets = false;
+  let file = process.env.MONEYLOVER_SOURCE_FILE ?? '', reportPath = '', expectationsPath = '', apply = false, checkSheets = false, cleanup = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--apply') apply = true;
     else if (arg === '--check-sheets') checkSheets = true;
+    else if (arg === '--cleanup') cleanup = true;
     else if (['--file', '--report', '--expectations'].includes(arg) && args[i + 1] && !args[i + 1].startsWith('--')) {
       if (arg === '--file') file = args[++i];
       else if (arg === '--report') reportPath = args[++i];
@@ -28,7 +29,7 @@ async function main() {
   if (expectationsPath && (!expectations || typeof expectations !== 'object' || Array.isArray(expectations))) throw new Error('INVALID_EXPECTATIONS');
   const reconciliation = expectations ? reconcileSource(parsed, expectations) : { matches: null, checks: [], status: 'EXPECTATIONS_NOT_PROVIDED' };
   const report: Record<string, unknown> = { mode: apply ? 'APPLY' : 'DRY_RUN', summary, reconciliation,
-    warnings: ['IDENTICAL_SOURCE_ROWS_ARE_PRESERVED', ...(summary.foreignUnconverted ? ['FOREIGN_CURRENCY_NOT_CONVERTED'] : [])] };
+    warnings: ['IDENTICAL_SOURCE_ROWS_ARE_PRESERVED'] };
   let lock: Awaited<ReturnType<typeof open>> | undefined;
   let reportFile: Awaited<ReturnType<typeof open>> | undefined;
   const lockPath = new URL('./.moneylover-import.lock', import.meta.url);
@@ -41,11 +42,15 @@ async function main() {
     } else if (reconciliation.matches === false) {
       report.status = 'RECONCILIATION_MISMATCH';
       process.exitCode = 1;
-    } else if (apply || checkSheets) {
+    } else if (apply || checkSheets || cleanup) {
       const config = readGoogleConfiguration(process.env);
       if (!config) throw new Error('SERVER_CONFIGURATION_ERROR');
       if (apply) lock = await open(lockPath, 'wx', 0o600).catch(() => { throw new Error('IMPORT_LOCKED'); });
-      report.import = await importMoneyLover(parsed, await makeHistoryImportPort(config), apply);
+      const port = await makeHistoryImportPort(config);
+      if (cleanup) {
+        report.cleanup = await cleanupImportedHistory(port, apply);
+      }
+      report.import = await importMoneyLover(parsed, port, apply);
       report.status = apply ? 'APPLY_VERIFIED' : 'DRY_RUN_WITH_SHEETS';
     } else {
       report.status = 'DRY_RUN_SOURCE_ONLY';
@@ -64,7 +69,7 @@ async function main() {
 }
 main().catch((error: unknown) => {
   const code = (error as Error)?.message;
-  const allowed = /^(INVALID_ARGUMENTS|INVALID_EXPECTATIONS|MONEYLOVER_SOURCE_FILE_REQUIRED|SOURCE_OVERWRITE_FORBIDDEN|SERVER_CONFIGURATION_ERROR|IMPORT_LOCKED|XLSX_FILE_REQUIRED|XLSX_READ_FAILED|XLSX_TOO_LARGE|INVALID_XLSX|TRANSACTION_SHEET_REQUIRED|FORMULA_NOT_ALLOWED|UNSUPPORTED_CELL_TYPE|EMPTY_TRANSACTION_SHEET|INVALID_MONEYLOVER_HEADERS|HISTORY_SCHEMA_MISMATCH|INVALID_HISTORY_ROW|DUPLICATE_HISTORY_ID|DUPLICATE_SOURCE_ID|HISTORY_CONTENT_CONFLICT|SOURCE_ROWS_REJECTED|HISTORY_CHANGED_RETRY_DRY_RUN|IMPORT_OUTCOME_UNKNOWN_READBACK_REQUIRED|IMPORT_READBACK_MISMATCH|HISTORY_CHANGED_DURING_IMPORT)$/;
+  const allowed = /^(INVALID_ARGUMENTS|INVALID_EXPECTATIONS|MONEYLOVER_SOURCE_FILE_REQUIRED|SOURCE_OVERWRITE_FORBIDDEN|SERVER_CONFIGURATION_ERROR|IMPORT_LOCKED|XLSX_FILE_REQUIRED|XLSX_READ_FAILED|XLSX_TOO_LARGE|INVALID_XLSX|TRANSACTION_SHEET_REQUIRED|FORMULA_NOT_ALLOWED|UNSUPPORTED_CELL_TYPE|EMPTY_TRANSACTION_SHEET|INVALID_MONEYLOVER_HEADERS|HISTORY_SCHEMA_MISMATCH|INVALID_HISTORY_ROW|DUPLICATE_HISTORY_ID|DUPLICATE_SOURCE_ID|HISTORY_CONTENT_CONFLICT|SOURCE_ROWS_REJECTED|HISTORY_CHANGED_RETRY_DRY_RUN|IMPORT_OUTCOME_UNKNOWN_READBACK_REQUIRED|IMPORT_READBACK_MISMATCH|HISTORY_CHANGED_DURING_IMPORT|CLEANUP_READBACK_MISMATCH|REPLACE_HISTORY_NOT_SUPPORTED)$/;
   console.error(allowed.test(code) ? code : 'MONEYLOVER_IMPORT_FAILED');
   process.exitCode = 1;
 });

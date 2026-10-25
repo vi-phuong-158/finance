@@ -1,12 +1,12 @@
 import { hasExpectedHeaders, TRANSACTION_HEADERS } from './sheet-schema.js';
 import { canonicalBankCategory } from './categories.js';
 import { HISTORY_HEADERS, minorUnits, validDate } from './moneylover/schema.js';
-import { readHistoryRow } from './moneylover/history-reader.js';
+import { isExcludedHistoryRow, readHistoryRow } from './moneylover/history-reader.js';
 import type { Bank } from './transaction-service.js';
 
 export type UnifiedTransaction = {
   id: string; date: string; time: string | null; datePrecision: 'DAY' | 'MINUTE';
-  type: 'THU' | 'CHI'; amount: number; currency: string; amountVnd: number | null;
+  type: 'THU' | 'CHI'; amount: number; currency: 'VND';
   category: string; originalCategory: string; accountOrWallet: string | null; bank: Bank | null;
   counterparty: string | null; description: string | null; event: string | null;
   source: 'BANK_NOTIFICATION' | 'MONEYLOVER'; excludedFromReport: boolean;
@@ -26,8 +26,9 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransacti
   const populated = (row: unknown[]) => row.some((v) => v !== '' && v !== null && v !== undefined);
   for (const row of snapshot.history.slice(1).filter(populated)) {
     const t = readHistoryRow(row);
+    if (isExcludedHistoryRow(t)) continue;
     rows.push({ id: `moneylover:${t.legacyId}`, date: t.date, time: null, datePrecision: 'DAY', type: t.type,
-      amount: t.amount, currency: t.currency, amountVnd: t.amountVnd, category: t.category, originalCategory: t.category,
+      amount: t.amount, currency: 'VND', category: t.category, originalCategory: t.category,
       accountOrWallet: t.wallet || null, bank: null, counterparty: t.counterparty || null, description: t.note || null,
       event: t.event || null, source: 'MONEYLOVER', excludedFromReport: t.excludedFromReport || t.category === 'Chuyển nội bộ',
       possibleDuplicate: false, possibleDuplicateCount: 0 });
@@ -43,21 +44,21 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransacti
     if (!validDate(date) || Number(match[4]) > 23 || Number(match[5]) > 59) throw new Error('INVALID_FINANCE_ROW');
     const canonical = canonicalBankCategory(text(category));
     rows.push({ id: `bank:${id}`, date, time: `${date}T${time}:00+07:00`, datePrecision: 'MINUTE', type,
-      amount, currency: 'VND', amountVnd: amount, category: canonical, originalCategory: text(category),
+      amount, currency: 'VND', category: canonical, originalCategory: text(category),
       accountOrWallet: text(bank), bank: bank as Bank, counterparty: text(party) || null,
       description: text(description) || null, event: null, source: 'BANK_NOTIFICATION', excludedFromReport: canonical === 'Chuyển nội bộ',
       possibleDuplicate: false, possibleDuplicateCount: 0 });
   }
   if (new Set(rows.map((t) => t.id)).size !== rows.length) throw new Error('DUPLICATE_FINANCE_ID');
   const groups = new Map<string, { bank: number; history: number }>();
-  const key = (t: UnifiedTransaction) => `${t.date}|${t.type}|${t.amountVnd}`;
-  for (const t of rows.filter((t) => t.amountVnd !== null)) {
+  const key = (t: UnifiedTransaction) => `${t.date}|${t.type}|${t.amount}`;
+  for (const t of rows) {
     const group = groups.get(key(t)) ?? { bank: 0, history: 0 };
     group[t.source === 'MONEYLOVER' ? 'history' : 'bank']++;
     groups.set(key(t), group);
   }
   for (const t of rows) {
-    const group = t.amountVnd === null ? undefined : groups.get(key(t));
+    const group = groups.get(key(t));
     t.possibleDuplicateCount = group ? group[t.source === 'MONEYLOVER' ? 'bank' : 'history'] : 0;
     t.possibleDuplicate = t.possibleDuplicateCount > 0;
   }

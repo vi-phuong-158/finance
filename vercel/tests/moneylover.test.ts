@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseMoneyLover } from '../lib/moneylover/parser.js';
 import { HISTORY_HEADERS, historyRow, parseBoolean, sumMoney } from '../lib/moneylover/schema.js';
-import { importMoneyLover, planImport } from '../lib/moneylover/importer.js';
+import { cleanupImportedHistory, importMoneyLover, planCleanup, planImport } from '../lib/moneylover/importer.js';
 import type { HistorySnapshot, ImportPort } from '../lib/moneylover/importer.js';
 import { readMoneyLoverXlsx } from '../lib/moneylover/xlsx-reader.js';
 import { readHistoryRow } from '../lib/moneylover/history-reader.js';
@@ -14,15 +14,39 @@ import { historyAppendRequests } from '../lib/moneylover/google-history.js';
 import { summarizeSource, reconcileSource } from '../lib/moneylover/report.js';
 import { sourceRow, sourceTable } from './moneylover-fixtures.js';
 
-test('Money Lover signed amounts, date-only, VND/JPY and source fields survive normalization', () => {
+test('Money Lover signed amounts, date-only VND and source fields survive normalization; non-VND is excluded', () => {
   const result = parseMoneyLover(sourceTable(sourceRow(), sourceRow({ 3: 600000, 4: 'JPY' })));
   assert.deepEqual(result.rejected, []);
-  const [chi, thu] = result.transactions;
+  assert.equal(result.excluded.length, 1);
+  assert.equal(result.excluded[0].reason, 'CURRENCY_NOT_VND');
+  assert.equal(result.excluded[0].currency, 'JPY');
+  assert.equal(result.transactions.length, 1);
+  const [chi] = result.transactions;
   assert.equal(chi.type, 'CHI'); assert.equal(chi.amount, 12500); assert.equal(chi.amountVnd, 12500);
+  assert.equal(chi.currency, 'VND');
   assert.equal(chi.date, '2026-02-28'); assert.equal(chi.wallet, 'Wallet A'); assert.equal(chi.category, 'Cafe');
   assert.equal(chi.note, 'Note\nsecond line'); assert.equal(chi.counterparty, 'Merchant A'); assert.equal(chi.event, 'Event A');
-  assert.equal(chi.member, 'Member A'); assert.equal(thu.type, 'THU'); assert.equal(thu.currency, 'JPY'); assert.equal(thu.amountVnd, null);
+  assert.equal(chi.member, 'Member A');
   assert.deepEqual(readHistoryRow(historyRow(chi)), chi);
+});
+test('Money Lover non-consumption categories (Cho vay, Trả lãi, Vay, Trả nợ, Thu nợ, Đi vay) are excluded', () => {
+  const table = sourceTable(
+    sourceRow({ 2: 'Cho vay', 3: -30000000 }),
+    sourceRow({ 2: 'Trả lãi', 3: -500000 }),
+    sourceRow({ 2: 'Vay', 3: 10000000 }),
+    sourceRow({ 2: 'Đi vay', 3: 5000000 }),
+    sourceRow({ 2: 'Trả nợ', 3: -2000000 }),
+    sourceRow({ 2: 'Thu nợ', 3: 1500000 }),
+    sourceRow({ 2: 'Lương', 3: 20000000 }),
+    sourceRow({ 2: 'Thu nhập khác', 3: 500000 }),
+    sourceRow({ 2: 'Tiền chuyển đến', 3: 1000000 }),
+  );
+  const result = parseMoneyLover(table);
+  assert.deepEqual(result.rejected, []);
+  assert.equal(result.excluded.length, 6);
+  assert.equal(result.excluded.every((e) => e.reason === 'NON_CONSUMPTION_CATEGORY'), true);
+  assert.equal(result.transactions.length, 3);
+  assert.deepEqual(result.transactions.map((t) => t.category), ['Lương', 'Thu nhập khác', 'Tiền chuyển đến']);
 });
 test('blank optional fields are preserved and exclusion flags have an explicit allowlist', () => {
   const t = parseMoneyLover(sourceTable(sourceRow({ 6: '', 7: null, 8: undefined, 9: '' }))).transactions[0];
@@ -60,10 +84,17 @@ test('deterministic multiset identity survives reordering/renumbering and preser
 function memoryPort(): { port: ImportPort; snapshot: HistorySnapshot; writes: number; loseResponse: boolean } {
   const state = { snapshot: { exists: false, headers: [], rows: [] } as HistorySnapshot, writes: 0, loseResponse: false,
     port: {} as ImportPort };
-  state.port = { readHistory: async () => structuredClone(state.snapshot), appendHistory: async (rows, create) => {
-    state.writes++; if (create) { state.snapshot.exists = true; state.snapshot.headers = HISTORY_HEADERS; }
-    state.snapshot.rows.push(...rows); if (state.loseResponse) throw new Error('private-upstream-details');
-  } };
+  state.port = {
+    readHistory: async () => structuredClone(state.snapshot),
+    appendHistory: async (rows, create) => {
+      state.writes++; if (create) { state.snapshot.exists = true; state.snapshot.headers = HISTORY_HEADERS; }
+      state.snapshot.rows.push(...rows); if (state.loseResponse) throw new Error('private-upstream-details');
+    },
+    replaceHistory: async (rows) => {
+      state.writes++;
+      state.snapshot.rows = structuredClone(rows);
+    },
+  };
   return state;
 }
 test('Sheets import request writes only the history tab and never evaluates formula-like source text', () => {
@@ -112,12 +143,55 @@ test('reconciliation separates original currency and excluded rows from report t
   const parsed = parseMoneyLover(sourceTable(sourceRow(), sourceRow({ 3: 600000, 4: 'JPY' }), sourceRow({ 3: -30000, 9: '✅' })));
   const summary = summarizeSource(parsed);
   assert.equal(summary.totalsByCurrency.VND.expense, 42500); assert.equal(summary.reportVnd.expense, 12500);
-  assert.equal(summary.totalsByCurrency.JPY.income, 600000); assert.equal(summary.reportVnd.income, 0);
+  assert.equal(summary.currencies.VND, 2);
+  assert.equal(summary.currencies.JPY, undefined);
+  assert.equal(summary.excludedCount, 1);
   assert.equal(sumMoney([0.1, 0.2]), 0.3); assert.throws(() => sumMoney([Number.MAX_SAFE_INTEGER]), /INVALID_AMOUNT/);
   assert.throws(() => sumMoney([0.0000001]), /INVALID_AMOUNT/);
-  assert.equal(reconcileSource(parsed, { rows: 3, expenseVnd: 42500, categoryExpenseVnd: { Cafe: 42500 } }).matches, true);
+  assert.equal(reconcileSource(parsed, { rows: 2, expenseVnd: 42500, categoryExpenseVnd: { Cafe: 42500 } }).matches, true);
   assert.equal(reconcileSource(parsed, { expenseVnd: 1 }).matches, false);
   assert.throws(() => reconcileSource(parsed, {}), /INVALID_EXPECTATIONS/);
+});
+
+test('cleanup purges excluded rows from existing history and re-import skips already imported rows without re-adding excluded', async () => {
+  const state = memoryPort();
+  const chi = sourceRow({ 0: 1, 2: 'Cafe', 3: -12500, 4: 'VND' });
+  const choVay = sourceRow({ 0: 2, 2: 'Cho vay', 3: -30000000, 4: 'VND' });
+  const traLai = sourceRow({ 0: 3, 2: 'Trả lãi', 3: -500000, 4: 'VND' });
+  const jpy = sourceRow({ 0: 4, 2: 'Thu nhập khác', 3: 600000, 4: 'JPY' });
+
+  const parsed = parseMoneyLover(sourceTable(chi, choVay, traLai, jpy));
+  assert.equal(parsed.excluded.length, 3);
+  assert.equal(parsed.transactions.length, 1);
+  const validTx = parsed.transactions[0];
+
+  // Simulate old snapshot with 4 rows (1 valid, 3 excluded)
+  state.snapshot.exists = true;
+  state.snapshot.headers = [...HISTORY_HEADERS];
+  state.snapshot.rows = [
+    historyRow(validTx),
+    historyRow({ legacyId: 'ml1_' + '2'.repeat(64), date: '2026-02-28', type: 'CHI', amount: 30000000, currency: 'VND', amountVnd: 30000000, category: 'Cho vay', wallet: 'Wallet A', note: '', counterparty: '', event: '', excludedFromReport: true, source: 'MONEYLOVER', originalNo: '2', member: '' }),
+    historyRow({ legacyId: 'ml1_' + '3'.repeat(64), date: '2026-02-28', type: 'CHI', amount: 500000, currency: 'VND', amountVnd: 500000, category: 'Trả lãi', wallet: 'Wallet A', note: '', counterparty: '', event: '', excludedFromReport: false, source: 'MONEYLOVER', originalNo: '3', member: '' }),
+    historyRow({ legacyId: 'ml1_' + '4'.repeat(64), date: '2026-02-28', type: 'THU', amount: 600000, currency: 'JPY', amountVnd: null, category: 'Thu nhập khác', wallet: 'Yên', note: '', counterparty: '', event: '', excludedFromReport: false, source: 'MONEYLOVER', originalNo: '4', member: '' }),
+  ];
+
+  const plan = planCleanup(state.snapshot);
+  assert.equal(plan.toRemove.length, 3);
+  assert.equal(plan.toKeep.length, 1);
+  assert.deepEqual(plan.removedRows.map((r) => r.reason).sort(), ['CURRENCY_NOT_VND', 'NON_CONSUMPTION_CATEGORY', 'NON_CONSUMPTION_CATEGORY']);
+
+  const cleaned = await cleanupImportedHistory(state.port, true);
+  assert.equal(cleaned.status, 'CLEANED_UP');
+  assert.equal(cleaned.removedCount, 3);
+  assert.equal(cleaned.remainingCount, 1);
+  assert.equal(state.snapshot.rows.length, 1);
+
+  // Now run importer again with source containing all 4 rows
+  const reimport = await importMoneyLover(parsed, state.port, true);
+  assert.equal(reimport.status, 'ALREADY_IMPORTED');
+  assert.equal(reimport.inserted, 0);
+  assert.equal(reimport.skipped, 1);
+  assert.equal(state.snapshot.rows.length, 1);
 });
 
 test('real XLSX reader handles sanitized shared/inline strings, sparse cells and numeric dates; rejects formulas', async () => {
