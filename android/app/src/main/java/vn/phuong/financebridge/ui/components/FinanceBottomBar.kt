@@ -1,9 +1,15 @@
 package vn.phuong.financebridge.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -11,117 +17,67 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.theme.FinanceTheme
-import vn.phuong.financebridge.ui.theme.Primary500
 
-enum class NavigationTab(val label: String, val iconSymbol: String) {
-    DASHBOARD("Tổng quan", "◈"),
-    TRANSACTIONS("Giao dịch", "≡"),
-    REPORTS("Báo cáo", "◷"),
-    SETTINGS("Cài đặt", "⚙")
+enum class NavigationTab(val label: String, val icon: ImageVector) {
+    DASHBOARD("Tổng quan", Icons.Rounded.Home),
+    ACCOUNTS("Tài khoản", Icons.Rounded.AccountBalanceWallet),
+    RECORD("Ghi chép", Icons.Rounded.Add),
+    REPORTS("Báo cáo", Icons.Rounded.PieChart),
+    MORE("Khác", Icons.Rounded.GridView),
+    TRANSACTIONS("Giao dịch", Icons.Rounded.AccountBalanceWallet), // internal route, not shown in bottom bar
 }
 
 @Composable
 fun FinanceBottomBar(
     currentTab: NavigationTab,
     onTabSelected: (NavigationTab) -> Unit,
-    onAddClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val barShape = FinanceTheme.shapes.xxl
+    val visibleTabs = listOf(
+        NavigationTab.DASHBOARD,
+        NavigationTab.ACCOUNTS,
+        NavigationTab.RECORD,
+        NavigationTab.REPORTS,
+        NavigationTab.MORE,
+    )
 
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .shadow(
+                elevation = FinanceTheme.spacing.elevationFloating,
+                shape = barShape,
+                ambientColor = Color(0x12000000),
+                spotColor = Color(0x2608A9D6),
+            )
+            .clip(barShape)
+            .background(FinanceTheme.colors.primary)
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Floating Glass Bar
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(68.dp)
-                .shadow(
-                    elevation = FinanceTheme.spacing.elevationFloating,
-                    shape = barShape,
-                    ambientColor = Color(0x14000000),
-                    spotColor = Color(0x1F2F8F63),
+        visibleTabs.forEach { tab ->
+            if (tab == NavigationTab.RECORD) {
+                RecordTabItem(
+                    isSelected = currentTab == NavigationTab.RECORD,
+                    onSelect = { onTabSelected(NavigationTab.RECORD) },
+                    modifier = Modifier.weight(1f),
                 )
-                .clip(barShape)
-                .background(FinanceTheme.colors.surfaceGlass)
-                .border(
-                    width = 1.dp,
-                    color = FinanceTheme.colors.borderGlass,
-                    shape = barShape,
-                )
-                .padding(horizontal = 8.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Tab 1: Tổng quan
+            } else {
                 TabItem(
-                    tab = NavigationTab.DASHBOARD,
-                    isSelected = currentTab == NavigationTab.DASHBOARD,
-                    onSelect = { onTabSelected(NavigationTab.DASHBOARD) },
-                )
-
-                // Tab 2: Giao dịch
-                TabItem(
-                    tab = NavigationTab.TRANSACTIONS,
-                    isSelected = currentTab == NavigationTab.TRANSACTIONS,
-                    onSelect = { onTabSelected(NavigationTab.TRANSACTIONS) },
-                )
-
-                // Center placeholder for the floating Add button
-                Spacer(modifier = Modifier.width(48.dp))
-
-                // Tab 3: Báo cáo
-                TabItem(
-                    tab = NavigationTab.REPORTS,
-                    isSelected = currentTab == NavigationTab.REPORTS,
-                    onSelect = { onTabSelected(NavigationTab.REPORTS) },
-                )
-
-                // Tab 4: Cài đặt
-                TabItem(
-                    tab = NavigationTab.SETTINGS,
-                    isSelected = currentTab == NavigationTab.SETTINGS,
-                    onSelect = { onTabSelected(NavigationTab.SETTINGS) },
+                    tab = tab,
+                    isSelected = currentTab == tab,
+                    onSelect = { onTabSelected(tab) },
+                    modifier = Modifier.weight(1f),
                 )
             }
-        }
-
-        // Center Floating Add Action Button
-        Box(
-            modifier = Modifier
-                .offset(y = (-6).dp)
-                .size(52.dp)
-                .shadow(
-                    elevation = 6.dp,
-                    shape = FinanceTheme.shapes.pill,
-                    ambientColor = Color(0x242F8F63),
-                    spotColor = Color(0x402F8F63),
-                )
-                .clip(FinanceTheme.shapes.pill)
-                .background(Primary500)
-                .clickable(onClick = onAddClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "+",
-                style = FinanceTheme.typography.headlineLarge.copy(
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Light,
-                ),
-                color = Color.White,
-            )
         }
     }
 }
@@ -131,30 +87,73 @@ private fun TabItem(
     tab: NavigationTab,
     isSelected: Boolean,
     onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val activeColor = FinanceTheme.colors.primary
-    val inactiveColor = FinanceTheme.colors.textMuted
+    val activeColor = Color.White
+    val inactiveColor = Color.White.copy(alpha = 0.68f)
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(FinanceTheme.shapes.medium)
             .clickable(onClick = onSelect)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Text(
-            text = tab.iconSymbol,
-            style = FinanceTheme.typography.titleMedium.copy(fontSize = 18.sp),
-            color = if (isSelected) activeColor else inactiveColor,
+        Icon(
+            imageVector = tab.icon,
+            contentDescription = tab.label,
+            modifier = Modifier.size(24.dp),
+            tint = if (isSelected) activeColor else inactiveColor,
         )
         Text(
             text = tab.label,
             style = FinanceTheme.typography.caption.copy(
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             ),
             color = if (isSelected) activeColor else inactiveColor,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun RecordTabItem(
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(FinanceTheme.shapes.medium)
+            .clickable(onClick = onSelect)
+            .padding(horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(FinanceTheme.shapes.pill)
+                .background(Color.White),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = "Ghi chép",
+                modifier = Modifier.size(28.dp),
+                tint = FinanceTheme.colors.primary,
+            )
+        }
+        Text(
+            text = "Ghi chép",
+            style = FinanceTheme.typography.caption.copy(
+                fontSize = 10.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            ),
+            color = Color.White,
+            maxLines = 1,
         )
     }
 }
