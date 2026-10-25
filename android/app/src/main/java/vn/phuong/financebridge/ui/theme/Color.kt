@@ -4,48 +4,52 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// Base 500k VND banknote green inspired palette
-val Primary50 = Color(0xFFF3FBF6)
-val Primary100 = Color(0xFFDFF3E8)
-val Primary200 = Color(0xFFBDE6CF)
-val Primary300 = Color(0xFF8FD2AC)
-val Primary400 = Color(0xFF63BA88)
-val Primary500 = Color(0xFF2F8F63)
-val Primary600 = Color(0xFF257A53)
-val Primary700 = Color(0xFF1D6243)
-val Primary800 = Color(0xFF174E36)
-val Primary900 = Color(0xFF113B29)
+// Cyan/blue finance palette derived from DESIGN.md and the MISA layout reference.
+// Keep token names stable so existing UI components remain source-compatible.
+val Primary50 = Color(0xFFF1FBFE)
+val Primary100 = Color(0xFFDDF6FD)
+val Primary200 = Color(0xFFB8ECF8)
+val Primary300 = Color(0xFF83DDF1)
+val Primary400 = Color(0xFF43C8E8)
+val Primary500 = Color(0xFF08A9D6)
+val Primary600 = Color(0xFF078CC5)
+val Primary700 = Color(0xFF0875A7)
+val Primary800 = Color(0xFF0B6088)
+val Primary900 = Color(0xFF104F70)
 
-val AccentMint = Color(0xFF7ED6A7)
+val HeroStart = Color(0xFF177CF2)
+val HeroEnd = Color(0xFF18C8D9)
+val AccentMint = Color(0xFF9AE8F4)
 
 // Neutral & surfaces (Light)
-val BackgroundLight = Color(0xFFF4F8F5)
+val BackgroundLight = Color(0xFFF4F6F8)
 val SurfaceLight = Color(0xFFFFFFFF)
 val SurfaceCardLight = Color(0xFFFFFFFF)
-val SurfaceGlassLight = Color(0xE6FFFFFF) // 90% opacity for soft glass
-val BorderGlassLight = Color(0x332F8F63) // Subtle green-tinted border
+// Glass remains available as a secondary effect, but cards should read as solid white first.
+val SurfaceGlassLight = Color(0xFAFFFFFF)
+val BorderGlassLight = Color(0xFFE7EBEF)
 
-val TextPrimaryLight = Color(0xFF123126)
-val TextSecondaryLight = Color(0xFF355347)
-val TextMutedLight = Color(0xFF6E8B7E)
+val TextPrimaryLight = Color(0xFF151A23)
+val TextSecondaryLight = Color(0xFF687386)
+val TextMutedLight = Color(0xFF98A1AE)
 
 // Semantic colors
-val IncomeGreen = Color(0xFF1F9D61)
-val ExpenseRed = Color(0xFFE85D5D)
-val WarningGold = Color(0xFFF4B740)
-val InfoBlue = Color(0xFF4F8FD7)
+val IncomeGreen = Color(0xFF28A765)
+val ExpenseRed = Color(0xFFEF5B63)
+val WarningGold = Color(0xFFF59E0B)
+val InfoBlue = Color(0xFF159BD7)
 
 // Dark Theme tokens
-val BackgroundDark = Color(0xFF0F1713)
-val SurfaceDark = Color(0xFF16231C)
-val SurfaceElevatedDark = Color(0xFF1C2D24)
-val SurfaceGlassDark = Color(0xD916231C) // 85% opacity
-val BorderGlassDark = Color(0x3358B980)
+val BackgroundDark = Color(0xFF0E151B)
+val SurfaceDark = Color(0xFF151E26)
+val SurfaceElevatedDark = Color(0xFF1B2731)
+val SurfaceGlassDark = Color(0xF21B2731)
+val BorderGlassDark = Color(0xFF2B3945)
 
-val PrimaryDark = Color(0xFF58B980)
-val TextPrimaryDark = Color(0xFFF2FBF5)
-val TextSecondaryDark = Color(0xFFB5CABE)
-val TextMutedDark = Color(0xFF7F978A)
+val PrimaryDark = Color(0xFF4EC9E7)
+val TextPrimaryDark = Color(0xFFF4F7FA)
+val TextSecondaryDark = Color(0xFFC2CBD3)
+val TextMutedDark = Color(0xFF8895A0)
 
 @Immutable
 data class FinanceColors(
