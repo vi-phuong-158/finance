@@ -104,6 +104,9 @@ snapshot immediately before writing, then uses one Sheets batch to add the tab
 (if absent) and append literal typed cells. Strings beginning with `=` stay strings,
 equivalent to RAW input. It never writes `formulaValue`, updates existing history,
 or touches the bank/raw tabs. Empty malformed history tabs fail closed.
+Cleanup uses a single atomic `spreadsheets.batchUpdate` (`updateCells`) to overwrite
+retained rows and clear excess historical rows starting from row 2 in one operation,
+preserving headers and eliminating any intermediate cleared state.
 
 Run one importer on one machine at a time; stop manual history edits during apply.
 A local lock blocks another CLI in the same checkout. This is **not** a distributed

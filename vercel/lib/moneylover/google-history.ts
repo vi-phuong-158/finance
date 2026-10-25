@@ -13,20 +13,38 @@ export function historyAppendRequests(rows: unknown[][], sheetId: number, create
   ];
 }
 
-export async function makeHistoryImportPort(config: GoogleConfiguration): Promise<ImportPort> {
-  const { google } = await import('googleapis');
-  const auth = new google.auth.GoogleAuth({ credentials: { client_email: config.clientEmail, private_key: config.privateKey },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
-  const sheets = google.sheets({ version: 'v4', auth }), spreadsheetId = config.spreadsheetId;
+export function historyReplaceRequests(rows: unknown[][], sheetId: number) {
+  const values = rows.map((row) => ({ values: row.map((v) => ({
+    userEnteredValue: typeof v === 'number' ? { numberValue: v } : typeof v === 'boolean' ? { boolValue: v } : { stringValue: String(v ?? '') },
+  })) }));
+  return [
+    {
+      updateCells: {
+        range: { sheetId, startRowIndex: 1 },
+        rows: values,
+        fields: 'userEnteredValue',
+      },
+    },
+  ];
+}
+
+export async function makeHistoryImportPort(config: GoogleConfiguration, customSheets?: unknown): Promise<ImportPort> {
+  const sheets = (customSheets as any) ?? await (async () => {
+    const { google } = await import('googleapis');
+    const auth = new google.auth.GoogleAuth({ credentials: { client_email: config.clientEmail, private_key: config.privateKey },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
+    return google.sheets({ version: 'v4', auth });
+  })();
+  const spreadsheetId = config.spreadsheetId;
   let sheetId: number | undefined;
   let availableSheetId = 1;
   return {
     async readHistory() {
       const meta = await sheets.spreadsheets.get({ spreadsheetId,
         fields: 'sheets(properties(sheetId,title,sheetType,gridProperties(rowCount,columnCount)))' });
-      const usedIds = new Set(meta.data.sheets?.map((s) => s.properties?.sheetId));
+      const usedIds = new Set(meta.data.sheets?.map((s: any) => s.properties?.sheetId));
       while (usedIds.has(availableSheetId)) availableSheetId++;
-      const tab = meta.data.sheets?.find((s) => s.properties?.title === HISTORY_TAB)?.properties;
+      const tab = meta.data.sheets?.find((s: any) => s.properties?.title === HISTORY_TAB)?.properties;
       if (!tab) return { exists: false, headers: [], rows: [] };
       if (tab.sheetType !== 'GRID' || tab.sheetId == null) throw new Error('HISTORY_SCHEMA_MISMATCH');
       const gridRows = tab.gridProperties?.rowCount ?? 0, gridColumns = tab.gridProperties?.columnCount ?? 0;
@@ -35,7 +53,7 @@ export async function makeHistoryImportPort(config: GoogleConfiguration): Promis
       const data = await sheets.spreadsheets.values.get({ spreadsheetId,
         range: `'${HISTORY_TAB}'!A1:${gridColumns > HISTORY_HEADERS.length ? 'P' : 'O'}${gridRows}`, valueRenderOption: 'UNFORMATTED_VALUE' });
       const rows = data.data.values ?? [];
-      if (rows.length > 50001 || rows.some((r) => r.length > HISTORY_HEADERS.length)) throw new Error('HISTORY_SCHEMA_MISMATCH');
+      if (rows.length > 50001 || rows.some((r: any[]) => r.length > HISTORY_HEADERS.length)) throw new Error('HISTORY_SCHEMA_MISMATCH');
       return { exists: true, headers: rows[0] ?? [], rows: rows.slice(1) };
     },
     async appendHistory(rows, create) {
@@ -46,23 +64,10 @@ export async function makeHistoryImportPort(config: GoogleConfiguration): Promis
     },
     async replaceHistory(rows) {
       if (sheetId === undefined) throw new Error('HISTORY_SCHEMA_MISMATCH');
-      await sheets.spreadsheets.values.clear({
-        spreadsheetId,
-        range: `'${HISTORY_TAB}'!A2:P50001`,
-      });
-      const values = rows.map((row) => ({
-        values: row.map((v) => ({
-          userEnteredValue: typeof v === 'number' ? { numberValue: v }
-            : typeof v === 'boolean' ? { boolValue: v }
-            : { stringValue: String(v ?? '') },
-        })),
-      }));
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
-          requests: [
-            { appendCells: { sheetId, rows: values, fields: 'userEnteredValue' } },
-          ],
+          requests: historyReplaceRequests(rows, sheetId),
         },
       }, { retry: false });
     },
