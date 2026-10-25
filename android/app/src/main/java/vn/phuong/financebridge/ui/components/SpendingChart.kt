@@ -58,7 +58,7 @@ fun SpendingChart(
         )
     }
 
-    GlassCard(
+    FinanceCard(
         modifier = modifier.fillMaxWidth(),
         shape = FinanceTheme.shapes.xLarge,
         contentPadding = 18.dp,

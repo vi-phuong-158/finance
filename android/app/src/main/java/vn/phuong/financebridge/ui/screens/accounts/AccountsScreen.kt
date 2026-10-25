@@ -6,18 +6,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Payments
-import androidx.compose.material.icons.rounded.ReceiptLong
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.rounded.Percent
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import vn.phuong.financebridge.ui.components.FinanceCard
+import vn.phuong.financebridge.ui.components.SecondaryButton
 import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -25,9 +29,10 @@ import vn.phuong.financebridge.ui.theme.FinanceTheme
 fun AccountsScreen(
     dashboardData: UiDashboard,
     onViewTransactions: () -> Unit,
-    onLoanTrackingClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    var showLoanPlaceholder by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -43,6 +48,7 @@ fun AccountsScreen(
             modifier = Modifier.padding(top = 8.dp),
         )
 
+        // Hero: Tài chính hiện tại / Tổng tài sản
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
@@ -56,7 +62,7 @@ fun AccountsScreen(
                 )
                 Text(
                     text = dashboardData.formattedBalance,
-                    style = FinanceTheme.typography.balance,
+                    style = FinanceTheme.typography.balance.copy(fontSize = 32.sp),
                     color = FinanceTheme.colors.textPrimary,
                 )
                 Text(
@@ -67,8 +73,9 @@ fun AccountsScreen(
             }
         }
 
+        // Section: Tài khoản ngân hàng
         Text(
-            text = "Nguồn ngân hàng",
+            text = "Tài khoản ngân hàng",
             style = FinanceTheme.typography.titleMedium,
             color = FinanceTheme.colors.textPrimary,
         )
@@ -79,41 +86,68 @@ fun AccountsScreen(
             contentPadding = 0.dp,
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                BankSourceRow("Vietcombank", "VCB")
-                BankSourceRow("VietinBank", "VietinBank")
-                BankSourceRow("BIDV", "BIDV")
+                BankSourceItem(
+                    name = "Vietcombank",
+                    syncStatus = "Đồng bộ tự động",
+                    balance = "Đang kết nối",
+                    badgeColor = Color(0xFFE8F5E9),
+                    iconTint = Color(0xFF2E7D32),
+                )
+                HorizontalDivider(color = FinanceTheme.colors.borderGlass.copy(alpha = 0.6f))
+                BankSourceItem(
+                    name = "VietinBank",
+                    syncStatus = "Đồng bộ tự động",
+                    balance = "Chưa có dữ liệu số dư",
+                    badgeColor = Color(0xFFE3F2FD),
+                    iconTint = Color(0xFF1565C0),
+                )
+                HorizontalDivider(color = FinanceTheme.colors.borderGlass.copy(alpha = 0.6f))
+                BankSourceItem(
+                    name = "BIDV",
+                    syncStatus = "Đồng bộ tự động",
+                    balance = "Chưa có dữ liệu số dư",
+                    badgeColor = Color(0xFFEDE7F6),
+                    iconTint = Color(0xFF4527A0),
+                )
             }
         }
 
+        // Section: Quản lý & Tiện ích tài chính
         Text(
-            text = "Quản lý",
+            text = "Quản lý & Tiện ích",
             style = FinanceTheme.typography.titleMedium,
             color = FinanceTheme.colors.textPrimary,
         )
 
+        // Entry: Theo dõi tiền lãi
         FinanceCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onLoanTrackingClick),
+                .clickable { showLoanPlaceholder = true },
             shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 18.dp,
+            contentPadding = 16.dp,
         ) {
             ActionRow(
-                icon = Icons.Rounded.Payments,
+                icon = Icons.Rounded.Percent,
+                iconBg = FinanceTheme.colors.primaryContainer,
+                iconTint = FinanceTheme.colors.primary,
                 title = "Theo dõi tiền lãi",
-                subtitle = "Khoản cho vay, lãi đã thu và lãi còn thu",
+                subtitle = "Quản lý khoản cho vay và lãi phải thu",
             )
         }
 
+        // Entry: Lịch sử giao dịch
         FinanceCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onViewTransactions),
             shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 18.dp,
+            contentPadding = 16.dp,
         ) {
             ActionRow(
-                icon = Icons.Rounded.ReceiptLong,
+                icon = Icons.AutoMirrored.Rounded.ReceiptLong,
+                iconBg = FinanceTheme.colors.primaryContainer,
+                iconTint = FinanceTheme.colors.primary,
                 title = "Lịch sử giao dịch",
                 subtitle = "Xem toàn bộ khoản thu và chi đã ghi nhận",
             )
@@ -121,62 +155,131 @@ fun AccountsScreen(
 
         Spacer(modifier = Modifier.height(56.dp))
     }
+
+    if (showLoanPlaceholder) {
+        Dialog(onDismissRequest = { showLoanPlaceholder = false }) {
+            Surface(
+                shape = FinanceTheme.shapes.xLarge,
+                color = FinanceTheme.colors.surfaceCard,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.pill),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Percent,
+                            contentDescription = null,
+                            tint = FinanceTheme.colors.primary,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+
+                    Text(
+                        text = "Theo dõi tiền lãi",
+                        style = FinanceTheme.typography.titleLarge,
+                        color = FinanceTheme.colors.textPrimary,
+                    )
+
+                    Text(
+                        text = "Tính năng đang được hoàn thiện",
+                        style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = FinanceTheme.colors.primary,
+                    )
+
+                    Text(
+                        text = "Theo dõi các khoản cho vay, lãi suất và lịch thu lãi định kỳ sẽ được hỗ trợ trong các phiên bản cập nhật tới.",
+                        style = FinanceTheme.typography.bodyMedium,
+                        color = FinanceTheme.colors.textSecondary,
+                        lineHeight = 20.sp,
+                    )
+
+                    SecondaryButton(
+                        text = "Đóng",
+                        onClick = { showLoanPlaceholder = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
-private fun BankSourceRow(name: String, code: String) {
+private fun BankSourceItem(
+    name: String,
+    syncStatus: String,
+    balance: String,
+    badgeColor: Color,
+    iconTint: Color,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.medium),
+                .size(44.dp)
+                .background(badgeColor, FinanceTheme.shapes.medium),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.AccountBalance,
-                contentDescription = null,
-                tint = FinanceTheme.colors.primary,
+                contentDescription = name,
+                tint = iconTint,
+                modifier = Modifier.size(24.dp),
             )
         }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = name,
                 style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = FinanceTheme.colors.textPrimary,
             )
             Text(
-                text = "$code · nguồn giao dịch hỗ trợ",
+                text = syncStatus,
                 style = FinanceTheme.typography.caption,
-                color = FinanceTheme.colors.textMuted,
+                color = FinanceTheme.colors.income,
             )
         }
+        Text(
+            text = balance,
+            style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
+            color = FinanceTheme.colors.textMuted,
+        )
     }
 }
 
 @Composable
 private fun ActionRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
+    iconBg: Color,
+    iconTint: Color,
     title: String,
     subtitle: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.medium),
+                .background(iconBg, FinanceTheme.shapes.medium),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = FinanceTheme.colors.primary)
+            Icon(imageVector = icon, contentDescription = title, tint = iconTint, modifier = Modifier.size(24.dp))
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(

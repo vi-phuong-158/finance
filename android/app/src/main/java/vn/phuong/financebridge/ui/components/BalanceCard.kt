@@ -1,21 +1,28 @@
 package vn.phuong.financebridge.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.theme.HeroEnd
 import vn.phuong.financebridge.ui.theme.HeroStart
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun BalanceCard(
     balanceText: String,
@@ -24,6 +31,7 @@ fun BalanceCard(
     periodLabel: String,
     modifier: Modifier = Modifier,
 ) {
+    var isAmountVisible by remember { mutableStateOf(true) }
     val cardShape = FinanceTheme.shapes.xxl
     val gradientBrush = Brush.linearGradient(
         colors = listOf(HeroStart, HeroEnd),
@@ -36,7 +44,7 @@ fun BalanceCard(
                 elevation = FinanceTheme.spacing.elevationMedium,
                 shape = cardShape,
                 ambientColor = Color(0x12000000),
-                spotColor = Color(0x24177CF2),
+                spotColor = Color(0x28177CF2),
             )
             .clip(cardShape)
             .background(gradientBrush)
@@ -44,68 +52,64 @@ fun BalanceCard(
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                text = "Tài chính hiện tại",
-                style = FinanceTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.88f),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Tài chính hiện tại",
+                    style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = Color.White.copy(alpha = 0.88f),
+                )
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(FinanceTheme.shapes.pill)
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .clickable { isAmountVisible = !isAmountVisible },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (isAmountVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                        contentDescription = "Ẩn/hiện số dư",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
 
             Text(
-                text = balanceText,
+                text = if (isAmountVisible) balanceText else "•••••••• đ",
                 style = FinanceTheme.typography.balance.copy(fontSize = 34.sp),
                 color = Color.White,
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                SummaryTile(
-                    title = "Tổng thu",
-                    value = incomeText,
-                    modifier = Modifier.weight(1f),
+                Text(
+                    text = "Tổng hợp từ dữ liệu giao dịch",
+                    style = FinanceTheme.typography.caption,
+                    color = Color.White.copy(alpha = 0.80f),
                 )
-                SummaryTile(
-                    title = "Tổng chi",
-                    value = expenseText,
-                    modifier = Modifier.weight(1f),
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(FinanceTheme.shapes.pill)
+                        .background(Color.White.copy(alpha = 0.18f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                ) {
+                    Text(
+                        text = periodLabel,
+                        style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
+                        color = Color.White,
+                    )
+                }
             }
-
-            Text(
-                text = periodLabel,
-                style = FinanceTheme.typography.caption,
-                color = Color.White.copy(alpha = 0.75f),
-            )
         }
-    }
-}
-
-@Composable
-private fun SummaryTile(
-    title: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .clip(FinanceTheme.shapes.large)
-            .background(Color.White.copy(alpha = 0.15f))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = title,
-            style = FinanceTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.82f),
-        )
-        Text(
-            text = value,
-            style = FinanceTheme.typography.titleMedium,
-            color = Color.White,
-            maxLines = 1,
-        )
     }
 }

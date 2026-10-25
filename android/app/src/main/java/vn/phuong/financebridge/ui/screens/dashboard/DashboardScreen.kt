@@ -50,8 +50,9 @@ fun DashboardScreen(
             .background(FinanceTheme.colors.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        // 1. Header: Đơn giản, tiêu đề lớn + thời gian + icon đồng bộ
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -87,6 +88,7 @@ fun DashboardScreen(
             }
         }
 
+        // 2. Hero Card: Tài chính hiện tại (Gradient HeroStart -> HeroEnd, 34sp Bold)
         BalanceCard(
             balanceText = data.formattedBalance,
             incomeText = data.formattedIncome,
@@ -94,6 +96,7 @@ fun DashboardScreen(
             periodLabel = data.periodLabel,
         )
 
+        // 3. Tình hình thu chi tháng này: Card trắng chứa 3 metric (Thu, Chi, Chênh lệch)
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
@@ -127,8 +130,10 @@ fun DashboardScreen(
             }
         }
 
+        // 4. Biểu đồ xu hướng chi tiêu
         SpendingChart()
 
+        // 5. Danh mục chi tiêu
         if (data.categories.isNotEmpty()) {
             FinanceCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -147,6 +152,7 @@ fun DashboardScreen(
             }
         }
 
+        // 6. Giao dịch gần đây (tối đa 5 dòng theo DESIGN.md)
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
@@ -168,7 +174,7 @@ fun DashboardScreen(
                         subtitle = "Các giao dịch từ ngân hàng hoặc lịch sử sẽ hiển thị ở đây.",
                     )
                 } else {
-                    data.recentTransactions.take(6).forEach { tx ->
+                    data.recentTransactions.take(5).forEach { tx ->
                         TransactionRow(
                             transaction = tx,
                             onClick = { onTransactionClick(tx.id) },

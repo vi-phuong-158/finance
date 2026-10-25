@@ -95,7 +95,7 @@ fun TransactionsScreen(
                 contentPadding = PaddingValues(bottom = 70.dp),
             ) {
                 items(filteredList, key = { it.id }) { tx ->
-                    GlassCard(
+                    FinanceCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = FinanceTheme.shapes.large,
                         contentPadding = 8.dp,

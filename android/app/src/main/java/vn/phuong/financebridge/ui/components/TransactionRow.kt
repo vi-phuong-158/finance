@@ -3,12 +3,16 @@ package vn.phuong.financebridge.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,14 +33,13 @@ fun TransactionRow(
     } else {
         FinanceTheme.colors.expense.copy(alpha = 0.10f)
     }
-    val iconTextColor = if (isIncome) {
+    val iconTintColor = if (isIncome) {
         FinanceTheme.colors.income
     } else {
         FinanceTheme.colors.expense
     }
 
-    // Category glyph: initial letter or tailored financial glyph
-    val categoryLetter = transaction.category.firstOrNull()?.toString()?.uppercase() ?: "?"
+    val icon = getCategoryIcon(transaction.category)
 
     Row(
         modifier = modifier
@@ -55,13 +58,11 @@ fun TransactionRow(
                 .background(iconBgColor),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = categoryLetter,
-                style = FinanceTheme.typography.titleMedium.copy(
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-                color = iconTextColor,
+            Icon(
+                imageVector = icon,
+                contentDescription = transaction.category,
+                tint = iconTintColor,
+                modifier = Modifier.size(24.dp),
             )
         }
 
@@ -114,5 +115,22 @@ fun TransactionRow(
                 fontSize = 15.sp,
             ),
         )
+    }
+}
+
+private fun getCategoryIcon(category: String): ImageVector {
+    val lower = category.lowercase()
+    return when {
+        lower.contains("ăn") || lower.contains("uống") || lower.contains("cà phê") -> Icons.Rounded.Restaurant
+        lower.contains("xăng") || lower.contains("xe") || lower.contains("di chuyển") -> Icons.Rounded.LocalGasStation
+        lower.contains("mua sắm") || lower.contains("siêu thị") -> Icons.Rounded.ShoppingCart
+        lower.contains("lương") || lower.contains("tiền chuyển đến") || lower.contains("thu nhập") -> Icons.Rounded.Payments
+        lower.contains("con") || lower.contains("học") -> Icons.Rounded.ChildCare
+        lower.contains("điện") || lower.contains("nước") || lower.contains("hóa đơn") -> Icons.Rounded.ElectricBolt
+        lower.contains("quà") || lower.contains("quyên góp") -> Icons.Rounded.CardGiftcard
+        lower.contains("nhà") || lower.contains("gia đình") -> Icons.Rounded.Home
+        lower.contains("sức khỏe") || lower.contains("thuốc") || lower.contains("khám") -> Icons.Rounded.MedicalServices
+        lower.contains("giải trí") || lower.contains("phim") -> Icons.Rounded.SportsEsports
+        else -> Icons.Rounded.Receipt
     }
 }

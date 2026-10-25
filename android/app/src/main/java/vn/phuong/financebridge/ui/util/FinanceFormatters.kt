@@ -21,13 +21,13 @@ object FinanceFormatters {
         val formattedNumber = vndNumberFormat.format(absAmount)
         val sign = when {
             !includeSign -> ""
-            isIncome == true -> "+ "
-            isIncome == false -> "- "
-            amount > 0 -> "+ "
-            amount < 0 -> "- "
+            isIncome == true -> "+"
+            isIncome == false -> "-"
+            amount > 0 -> "+"
+            amount < 0 -> "-"
             else -> ""
         }
-        return "$sign$formattedNumber ₫"
+        return "$sign$formattedNumber đ"
     }
 
     fun formatFriendlyDate(epochMillis: Long): String {

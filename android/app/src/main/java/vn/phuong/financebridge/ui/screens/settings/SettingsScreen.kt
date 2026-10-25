@@ -6,11 +6,18 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,9 +37,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import vn.phuong.financebridge.*
-import vn.phuong.financebridge.ui.components.*
+import vn.phuong.financebridge.ui.components.FinanceCard
+import vn.phuong.financebridge.ui.components.PrimaryButton
+import vn.phuong.financebridge.ui.components.SecondaryButton
 import vn.phuong.financebridge.ui.theme.FinanceTheme
-import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
@@ -50,17 +58,19 @@ fun SettingsScreen(
 
     var hasNotifPermission by remember { mutableStateOf(isNotificationServiceEnabled(context)) }
     var isBatteryUnrestricted by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
-    var connectionStatus by remember { mutableStateOf(if (hasConfiguredSecret) "Đã lưu cấu hình; chưa kiểm tra" else "Chưa cấu hình") }
+    var connectionStatus by remember { mutableStateOf(if (hasConfiguredSecret) "Đã lưu mã kết nối; chưa kiểm tra" else "Chưa cấu hình") }
     var checkInProgress by remember { mutableStateOf(false) }
     var connectionWorkId by remember { mutableStateOf<UUID?>(null) }
     var queueError by remember { mutableStateOf<String?>(null) }
     var summary by remember { mutableStateOf(OutboxSummary(0, 0, emptyList())) }
+    var showTechnicalDetails by remember { mutableStateOf(false) }
+
     val workManager = remember(context) { WorkManager.getInstance(context) }
     val coroutineScope = rememberCoroutineScope()
 
     fun triggerConnectionCheck() {
         checkInProgress = true
-        connectionStatus = "Đang xếp hàng kiểm tra kết nối..."
+        connectionStatus = "Đang kiểm tra kết nối với máy chủ..."
         val request = OneTimeWorkRequestBuilder<ConnectionCheckWorker>()
             .setConstraints(
                 Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
@@ -99,14 +109,14 @@ fun SettingsScreen(
                     || latest?.state == WorkInfo.State.BLOCKED
                 if (latest?.state == WorkInfo.State.SUCCEEDED) {
                     isConnectionVerified = true
-                    connectionStatus = latest.outputData.getString("message") ?: "Kết nối thành công"
+                    connectionStatus = "Kết nối máy chủ thành công"
                 } else if (latest?.state == WorkInfo.State.FAILED) {
                     isConnectionVerified = false
-                    connectionStatus = latest.outputData.getString("message") ?: "Không kết nối được; kiểm tra cấu hình"
+                    connectionStatus = latest.outputData.getString("message") ?: "Không kết nối được; vui lòng kiểm tra mã kết nối"
                 } else if (latest?.state == WorkInfo.State.ENQUEUED || latest?.state == WorkInfo.State.BLOCKED) {
                     connectionStatus = "Đang chờ kết nối mạng..."
                 } else if (latest?.state == WorkInfo.State.RUNNING) {
-                    connectionStatus = "Đang kiểm tra server và Sheet..."
+                    connectionStatus = "Đang xác thực với máy chủ..."
                 }
             }
             val liveData = workManager.getWorkInfoByIdLiveData(currentWorkId)
@@ -121,16 +131,17 @@ fun SettingsScreen(
             .background(FinanceTheme.colors.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Cài đặt & Kết nối",
+            text = "Kết nối & Hệ thống",
             style = FinanceTheme.typography.headlineLarge,
             color = FinanceTheme.colors.textPrimary,
+            modifier = Modifier.padding(top = 8.dp),
         )
 
-        // Webhook Configuration GlassCard
-        GlassCard(
+        // Card 1: Máy chủ & Mã kết nối
+        FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
             contentPadding = 20.dp,
@@ -140,24 +151,31 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Text(
-                    text = "Cấu hình Webhook Vercel",
+                    text = "Kết nối máy chủ",
                     style = FinanceTheme.typography.titleMedium,
                     color = FinanceTheme.colors.textPrimary,
                 )
-                Text(
-                    text = "Máy chủ: ${BuildConfig.WEBHOOK_URL}",
-                    style = FinanceTheme.typography.bodyMedium,
-                    color = FinanceTheme.colors.textSecondary,
-                )
-                Text(
-                    text = "Trạng thái: $connectionStatus",
-                    style = FinanceTheme.typography.caption,
-                    color = if (isConnectionVerified) FinanceTheme.colors.income else FinanceTheme.colors.textMuted,
-                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Trạng thái",
+                        style = FinanceTheme.typography.bodyMedium,
+                        color = FinanceTheme.colors.textSecondary,
+                    )
+                    Text(
+                        text = connectionStatus,
+                        style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.SemiBold),
+                        color = if (isConnectionVerified) FinanceTheme.colors.income else FinanceTheme.colors.textMuted,
+                    )
+                }
 
                 if (hasConfiguredSecret && !isEditingSecret) {
                     Text(
-                        text = "Mã kết nối: •••••••••••• (Đã lưu an toàn bằng Keystore)",
+                        text = "Mã kết nối: •••••••••••• (Đã lưu an toàn)",
                         style = FinanceTheme.typography.bodyMedium,
                         color = FinanceTheme.colors.textSecondary,
                     )
@@ -175,7 +193,7 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                         )
                         PrimaryButton(
-                            text = if (checkInProgress) "Đang kiểm tra..." else "Kiểm tra",
+                            text = if (checkInProgress) "Đang kiểm tra..." else "Kiểm tra kết nối",
                             onClick = { triggerConnectionCheck() },
                             enabled = !checkInProgress,
                             modifier = Modifier.weight(1f),
@@ -188,17 +206,18 @@ fun SettingsScreen(
                             secretInput = it
                             secretFormatError = null
                         },
-                        label = { Text("Mã kết nối (Webhook Secret)") },
-                        placeholder = { Text("Nhập secret từ backend Vercel") },
+                        label = { Text("Mã kết nối") },
+                        placeholder = { Text("Nhập mã kết nối bảo mật") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         isError = secretFormatError != null,
                         supportingText = secretFormatError?.let { { Text(it) } },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
+                        shape = FinanceTheme.shapes.medium,
                     )
                     PrimaryButton(
-                        text = "Lưu và kiểm tra",
+                        text = "Lưu và kiểm tra kết nối",
                         onClick = {
                             val trimmed = secretInput.trim()
                             if (!WebhookConfiguration.isValidSecret(trimmed)) {
@@ -212,7 +231,7 @@ fun SettingsScreen(
                                 secretFormatError = null
                                 triggerConnectionCheck()
                             } else {
-                                secretFormatError = "Không thể lưu mã kết nối vào Keystore"
+                                secretFormatError = "Không thể lưu mã kết nối"
                             }
                         },
                         enabled = !checkInProgress,
@@ -221,8 +240,8 @@ fun SettingsScreen(
             }
         }
 
-        // Permissions Card
-        GlassCard(
+        // Card 2: Quyền hệ thống
+        FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
             contentPadding = 20.dp,
@@ -237,19 +256,20 @@ fun SettingsScreen(
                     color = FinanceTheme.colors.textPrimary,
                 )
 
+                // Quyền đọc thông báo
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "Quyền đọc thông báo",
+                            text = "Đọc biến động số dư",
                             style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                             color = FinanceTheme.colors.textPrimary,
                         )
                         Text(
-                            text = if (hasNotifPermission) "Đã cấp quyền đọc biến động số dư" else "Chưa cấp quyền",
+                            text = if (hasNotifPermission) "Đã cấp quyền đọc thông báo" else "Chưa bật quyền",
                             style = FinanceTheme.typography.caption,
                             color = if (hasNotifPermission) FinanceTheme.colors.income else FinanceTheme.colors.expense,
                         )
@@ -263,28 +283,29 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(color = FinanceTheme.colors.borderGlass.copy(alpha = 0.3f))
+                HorizontalDivider(color = FinanceTheme.colors.borderGlass.copy(alpha = 0.5f))
 
+                // Tối ưu hóa Pin
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "Tối ưu hóa Pin",
+                            text = "Hoạt động nền không hạn chế",
                             style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                             color = FinanceTheme.colors.textPrimary,
                         )
                         Text(
-                            text = if (isBatteryUnrestricted) "Chạy ngầm không hạn chế" else "Đang bị hệ thống hạn chế",
+                            text = if (isBatteryUnrestricted) "Đang chạy nền bình thường" else "Đang bị hệ thống hạn chế",
                             style = FinanceTheme.typography.caption,
                             color = if (isBatteryUnrestricted) FinanceTheme.colors.income else FinanceTheme.colors.warning,
                         )
                     }
                     if (!isBatteryUnrestricted) {
                         SecondaryButton(
-                            text = "Mở cài đặt",
+                            text = "Cài đặt pin",
                             onClick = {
                                 val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                                     data = Uri.parse("package:${context.packageName}")
@@ -298,8 +319,8 @@ fun SettingsScreen(
             }
         }
 
-        // Outbox Status Card
-        GlassCard(
+        // Card 3: Trạng thái đồng bộ hàng đợi
+        FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
             contentPadding = 20.dp,
@@ -309,19 +330,19 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "Hàng đợi đồng bộ Outbox",
+                    text = "Trạng thái đồng bộ",
                     style = FinanceTheme.typography.titleMedium,
                     color = FinanceTheme.colors.textPrimary,
                 )
                 Text(
-                    text = "${summary.pendingCount} đang chờ · ${summary.blockedCount} cần xử lý",
+                    text = "${summary.pendingCount} giao dịch đang chờ · ${summary.blockedCount} giao dịch cần gửi lại",
                     style = FinanceTheme.typography.bodyMedium,
                     color = FinanceTheme.colors.textSecondary,
                 )
 
                 if (summary.blockedCount > 0) {
                     PrimaryButton(
-                        text = "Gửi lại ${summary.blockedCount} giao dịch lỗi",
+                        text = "Gửi lại ${summary.blockedCount} giao dịch cần xử lý",
                         onClick = {
                             coroutineScope.launch {
                                 val outbox = TransactionOutbox(appContext)
@@ -342,23 +363,91 @@ fun SettingsScreen(
 
                 if (summary.recentEntries.isNotEmpty()) {
                     Text(
-                        text = "Nhật ký outbox gần nhất:",
+                        text = "Nhật ký đồng bộ gần nhất:",
                         style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
                         color = FinanceTheme.colors.textMuted,
                     )
                     summary.recentEntries.take(5).forEach { entry ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "${entry.bank} • ${formatOutboxState(entry.state)}",
+                                style = FinanceTheme.typography.caption,
+                                color = FinanceTheme.colors.textSecondary,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Card 4: Expandable Chi tiết kỹ thuật (dành cho bảo trì / hỗ trợ)
+        FinanceCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = FinanceTheme.shapes.xLarge,
+            contentPadding = 16.dp,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showTechnicalDetails = !showTechnicalDetails },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Chi tiết kỹ thuật",
+                        style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = FinanceTheme.colors.textMuted,
+                    )
+                    Icon(
+                        imageVector = if (showTechnicalDetails) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = FinanceTheme.colors.textMuted,
+                    )
+                }
+
+                AnimatedVisibility(visible = showTechnicalDetails) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         Text(
-                            text = "${entry.bank} • ${entry.eventId.take(8)}… • ${entry.state}",
+                            text = "Máy chủ: ${BuildConfig.WEBHOOK_URL}",
                             style = FinanceTheme.typography.caption,
-                            color = FinanceTheme.colors.textSecondary,
+                            color = FinanceTheme.colors.textMuted,
+                        )
+                        Text(
+                            text = "Phiên bản ứng dụng: 1.0 (Build 1)",
+                            style = FinanceTheme.typography.caption,
+                            color = FinanceTheme.colors.textMuted,
+                        )
+                        Text(
+                            text = "Hàng đợi: SQLite Outbox với Keystore AES/GCM",
+                            style = FinanceTheme.typography.caption,
+                            color = FinanceTheme.colors.textMuted,
                         )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(60.dp))
+        Spacer(modifier = Modifier.height(56.dp))
     }
+}
+
+private fun formatOutboxState(state: String): String = when (state) {
+    TransactionOutbox.STATE_SAVED_TRANSACTION -> "Đã đồng bộ"
+    TransactionOutbox.STATE_SAVED_RAW_CAPTURE -> "Đã lưu mẫu chờ phân tích"
+    TransactionOutbox.STATE_DUPLICATE -> "Đã ghi nhận trước đó"
+    TransactionOutbox.STATE_PENDING -> "Đang chờ gửi"
+    TransactionOutbox.STATE_BLOCKED -> "Cần gửi lại"
+    TransactionOutbox.STATE_DROPPED, TransactionOutbox.STATE_DROPPED_NON_TRANSACTION -> "Không phải giao dịch"
+    else -> state
 }
 
 private fun isNotificationServiceEnabled(context: Context): Boolean {

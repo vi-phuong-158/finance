@@ -1,33 +1,68 @@
 package vn.phuong.financebridge.ui.screens.record
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.components.FinanceCard
 import vn.phuong.financebridge.ui.components.FinanceChip
 import vn.phuong.financebridge.ui.components.PrimaryButton
 import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
+data class CategoryItem(val name: String, val icon: ImageVector, val color: Color)
+
+enum class ExtendedTransactionType(val label: String, val isEnabled: Boolean) {
+    CHI("Chi tiền", true),
+    THU("Thu tiền", true),
+    CHO_VAY("Cho vay", false),
+    DI_VAY("Đi vay", false),
+    CHUYEN_KHOAN("Chuyển khoản", false),
+    DIEU_CHINH("Điều chỉnh", false),
+}
+
 @Composable
 fun RecordScreen(
     onSave: (TransactionType, Long, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var type by remember { mutableStateOf(TransactionType.CHI) }
+    var selectedType by remember { mutableStateOf(ExtendedTransactionType.CHI) }
     var amountText by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Ăn uống") }
+    var selectedAccount by remember { mutableStateOf("Vietcombank") }
 
-    val categories = listOf("Ăn uống", "Xăng xe", "Con cái", "Mua sắm", "Du lịch", "Dịch vụ", "Khác")
+    val categories = listOf(
+        CategoryItem("Ăn uống", Icons.Rounded.Restaurant, Color(0xFFEF5350)),
+        CategoryItem("Xăng xe", Icons.Rounded.LocalGasStation, Color(0xFFFFA726)),
+        CategoryItem("Con cái", Icons.Rounded.ChildCare, Color(0xFF42A5F5)),
+        CategoryItem("Mua sắm", Icons.Rounded.ShoppingCart, Color(0xFFAB47BC)),
+        CategoryItem("Nhà ở", Icons.Rounded.Home, Color(0xFF26A69A)),
+        CategoryItem("Sức khỏe", Icons.Rounded.MedicalServices, Color(0xFFEC407A)),
+        CategoryItem("Giải trí", Icons.Rounded.SportsEsports, Color(0xFF7E57C2)),
+        CategoryItem("Khác", Icons.Rounded.MoreHoriz, Color(0xFF78909C)),
+    )
+
+    val accounts = listOf("Vietcombank", "VietinBank", "BIDV", "Tiền mặt")
 
     Column(
         modifier = modifier
@@ -44,106 +79,213 @@ fun RecordScreen(
             modifier = Modifier.padding(top = 8.dp),
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            FinanceChip(
-                text = "Chi tiền",
-                isSelected = type == TransactionType.CHI,
-                onClick = { type = TransactionType.CHI },
-                modifier = Modifier.weight(1f),
-            )
-            FinanceChip(
-                text = "Thu tiền",
-                isSelected = type == TransactionType.THU,
-                onClick = { type = TransactionType.THU },
-                modifier = Modifier.weight(1f),
-            )
-        }
-
+        // 1. Transaction Types (6 types, Chi & Thu active, 4 coming soon)
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 20.dp,
+            contentPadding = 14.dp,
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Số tiền",
-                    style = FinanceTheme.typography.bodyMedium,
-                    color = FinanceTheme.colors.textSecondary,
-                )
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it.filter(Char::isDigit) },
-                    placeholder = { Text("0 ₫") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = FinanceTheme.shapes.medium,
-                )
-            }
-        }
-
-        FinanceCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 18.dp,
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "Danh mục",
-                    style = FinanceTheme.typography.titleMedium,
-                    color = FinanceTheme.colors.textPrimary,
-                )
-                categories.chunked(3).forEach { rowItems ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        rowItems.forEach { category ->
-                            FinanceChip(
-                                text = category,
-                                isSelected = selectedCategory == category,
-                                onClick = { selectedCategory = category },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        repeat(3 - rowItems.size) { Spacer(modifier = Modifier.weight(1f)) }
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ExtendedTransactionType.values().take(3).forEach { t ->
+                        TypeSelectorChip(
+                            type = t,
+                            isSelected = selectedType == t,
+                            onClick = { if (t.isEnabled) selectedType = t },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ExtendedTransactionType.values().drop(3).take(3).forEach { t ->
+                        TypeSelectorChip(
+                            type = t,
+                            isSelected = selectedType == t,
+                            onClick = { if (t.isEnabled) selectedType = t },
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 }
             }
         }
 
+        // 2. Amount Input (Visual Focus, 30-34sp)
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 18.dp,
+            contentPadding = 20.dp,
         ) {
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Diễn giải") },
-                placeholder = { Text("Ví dụ: Cà phê, siêu thị, tiền điện...") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = FinanceTheme.shapes.medium,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Số tiền",
+                    style = FinanceTheme.typography.bodyMedium,
+                    color = FinanceTheme.colors.textSecondary,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it.filter(Char::isDigit) },
+                        placeholder = {
+                            Text(
+                                "0",
+                                style = FinanceTheme.typography.balance.copy(fontSize = 32.sp),
+                                color = FinanceTheme.colors.textMuted,
+                            )
+                        },
+                        textStyle = FinanceTheme.typography.balance.copy(
+                            fontSize = 32.sp,
+                            color = if (selectedType == ExtendedTransactionType.THU) FinanceTheme.colors.income else FinanceTheme.colors.expense,
+                        ),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        shape = FinanceTheme.shapes.medium,
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "đ",
+                        style = FinanceTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                        color = FinanceTheme.colors.textSecondary,
+                    )
+                }
+            }
         }
 
-        Text(
-            text = "Ngày ghi nhận: Hôm nay",
-            style = FinanceTheme.typography.bodyMedium,
-            color = FinanceTheme.colors.textSecondary,
-        )
+        // 3. Category Grid (4 columns, MISA-inspired icon tiles)
+        FinanceCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = FinanceTheme.shapes.xLarge,
+            contentPadding = 16.dp,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Danh mục",
+                        style = FinanceTheme.typography.titleMedium,
+                        color = FinanceTheme.colors.textPrimary,
+                    )
+                    Text(
+                        text = selectedCategory,
+                        style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = FinanceTheme.colors.primary,
+                    )
+                }
 
-        // Backend V3.1 does not persist manual entries yet. Keep the UI visible for review,
-        // but never imply a successful financial write before the API exists.
+                // 4-column Grid: row 1
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    categories.take(4).forEach { cat ->
+                        CategoryTile(
+                            item = cat,
+                            isSelected = selectedCategory == cat.name,
+                            onClick = { selectedCategory = cat.name },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+
+                // 4-column Grid: row 2
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    categories.drop(4).take(4).forEach { cat ->
+                        CategoryTile(
+                            item = cat,
+                            isSelected = selectedCategory == cat.name,
+                            onClick = { selectedCategory = cat.name },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Payment Account Selector
+        FinanceCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = FinanceTheme.shapes.xLarge,
+            contentPadding = 16.dp,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Tài khoản thanh toán",
+                    style = FinanceTheme.typography.titleMedium,
+                    color = FinanceTheme.colors.textPrimary,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    accounts.forEach { acc ->
+                        FinanceChip(
+                            text = acc,
+                            isSelected = selectedAccount == acc,
+                            onClick = { selectedAccount = acc },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. Description & Metadata
+        FinanceCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = FinanceTheme.shapes.xLarge,
+            contentPadding = 16.dp,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Diễn giải / Ghi chú") },
+                    placeholder = { Text("Ví dụ: Ăn trưa đồng nghiệp, mua đồ siêu thị...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = FinanceTheme.shapes.medium,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Thời gian ghi nhận",
+                        style = FinanceTheme.typography.caption,
+                        color = FinanceTheme.colors.textMuted,
+                    )
+                    Text(
+                        text = "Hôm nay",
+                        style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = FinanceTheme.colors.textPrimary,
+                    )
+                }
+            }
+        }
+
+        // 6. Action Button (Explicitly disabled with clear truthful guidance)
         PrimaryButton(
             text = "Lưu giao dịch (sắp hỗ trợ)",
             enabled = false,
             onClick = {
+                val domType = if (selectedType == ExtendedTransactionType.THU) TransactionType.THU else TransactionType.CHI
                 onSave(
-                    type,
+                    domType,
                     amountText.toLongOrNull() ?: 0L,
                     selectedCategory,
                     description,
@@ -152,11 +294,99 @@ fun RecordScreen(
         )
 
         Text(
-            text = "Chức năng ghi tay chưa được kết nối lưu dữ liệu. Giao dịch tự động từ thông báo ngân hàng vẫn hoạt động độc lập.",
+            text = "Chức năng ghi chép thủ công chưa được kết nối API lưu dữ liệu. Các biến động số dư tự động từ thông báo ngân hàng vẫn được cập nhật tự động bình thường.",
             style = FinanceTheme.typography.caption,
             color = FinanceTheme.colors.textMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(modifier = Modifier.height(56.dp))
+    }
+}
+
+@Composable
+private fun TypeSelectorChip(
+    type: ExtendedTransactionType,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bgColor = when {
+        isSelected -> FinanceTheme.colors.primary
+        !type.isEnabled -> FinanceTheme.colors.background
+        else -> FinanceTheme.colors.surfaceCard
+    }
+    val textColor = when {
+        isSelected -> Color.White
+        !type.isEnabled -> FinanceTheme.colors.textMuted.copy(alpha = 0.5f)
+        else -> FinanceTheme.colors.textSecondary
+    }
+    val borderColor = if (isSelected) FinanceTheme.colors.primary else FinanceTheme.colors.borderGlass
+
+    Box(
+        modifier = modifier
+            .clip(FinanceTheme.shapes.pill)
+            .background(bgColor)
+            .border(1.dp, borderColor, FinanceTheme.shapes.pill)
+            .clickable(enabled = type.isEnabled, onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = type.label,
+            style = FinanceTheme.typography.caption.copy(
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            ),
+            color = textColor,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun CategoryTile(
+    item: CategoryItem,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(FinanceTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(FinanceTheme.shapes.large)
+                .background(if (isSelected) item.color.copy(alpha = 0.22f) else item.color.copy(alpha = 0.10f))
+                .border(
+                    width = if (isSelected) 2.dp else 0.dp,
+                    color = if (isSelected) item.color else Color.Transparent,
+                    shape = FinanceTheme.shapes.large,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.name,
+                tint = item.color,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Text(
+            text = item.name,
+            style = FinanceTheme.typography.caption.copy(
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            ),
+            color = if (isSelected) FinanceTheme.colors.textPrimary else FinanceTheme.colors.textSecondary,
+            maxLines = 1,
+        )
     }
 }

@@ -3,6 +3,10 @@ package vn.phuong.financebridge.ui.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -102,10 +106,11 @@ fun EmptyState(
                 .background(FinanceTheme.colors.primaryContainer.copy(alpha = 0.6f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "✓",
-                style = FinanceTheme.typography.displayLarge.copy(fontSize = 32.sp),
-                color = FinanceTheme.colors.primary,
+            Icon(
+                imageVector = Icons.Rounded.Inbox,
+                contentDescription = null,
+                tint = FinanceTheme.colors.primary,
+                modifier = Modifier.size(36.dp),
             )
         }
 
@@ -154,10 +159,11 @@ fun ErrorState(
                 .background(FinanceTheme.colors.expense.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "!",
-                style = FinanceTheme.typography.headlineLarge,
-                color = FinanceTheme.colors.expense,
+            Icon(
+                imageVector = Icons.Rounded.ErrorOutline,
+                contentDescription = null,
+                tint = FinanceTheme.colors.expense,
+                modifier = Modifier.size(32.dp),
             )
         }
 

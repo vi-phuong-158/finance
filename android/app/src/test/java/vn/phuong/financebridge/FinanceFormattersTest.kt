@@ -12,16 +12,16 @@ class FinanceFormattersTest {
 
     @Test
     fun formatsVndAmountsWithVietnameseDotGrouping() {
-        assertEquals("104.051 ₫", FinanceFormatters.formatVnd(104051L))
-        assertEquals("1.250.000 ₫", FinanceFormatters.formatVnd(1250000L))
-        assertEquals("25.600.000 ₫", FinanceFormatters.formatVnd(25600000L))
-        assertEquals("0 ₫", FinanceFormatters.formatVnd(0L))
+        assertEquals("104.051 đ", FinanceFormatters.formatVnd(104051L))
+        assertEquals("1.250.000 đ", FinanceFormatters.formatVnd(1250000L))
+        assertEquals("25.600.000 đ", FinanceFormatters.formatVnd(25600000L))
+        assertEquals("0 đ", FinanceFormatters.formatVnd(0L))
     }
 
     @Test
     fun formatsSignedAmountsCorrectly() {
-        assertEquals("+ 1.250.000 ₫", FinanceFormatters.formatVnd(1250000L, includeSign = true, isIncome = true))
-        assertEquals("- 500.000 ₫", FinanceFormatters.formatVnd(500000L, includeSign = true, isIncome = false))
+        assertEquals("+1.250.000 đ", FinanceFormatters.formatVnd(1250000L, includeSign = true, isIncome = true))
+        assertEquals("-500.000 đ", FinanceFormatters.formatVnd(500000L, includeSign = true, isIncome = false))
     }
 
     @Test
@@ -49,7 +49,7 @@ class FinanceFormattersTest {
         assertEquals("test:1", tx.id)
         assertEquals(TransactionType.CHI, tx.type)
         assertEquals(45000L, tx.amount)
-        assertEquals("- 45.000 ₫", tx.formattedAmount)
+        assertEquals("-45.000 đ", tx.formattedAmount)
         assertEquals("Ăn uống", tx.category)
     }
 
