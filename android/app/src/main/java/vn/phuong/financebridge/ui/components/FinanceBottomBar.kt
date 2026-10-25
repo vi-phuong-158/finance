@@ -51,6 +51,7 @@ fun FinanceBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp)
+            .heightIn(min = 76.dp)
             .shadow(
                 elevation = FinanceTheme.spacing.elevationFloating,
                 shape = barShape,
@@ -134,7 +135,7 @@ private fun RecordTabItem(
     ) {
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(54.dp)
                 .clip(FinanceTheme.shapes.pill)
                 .background(Color.White),
             contentAlignment = Alignment.Center,
