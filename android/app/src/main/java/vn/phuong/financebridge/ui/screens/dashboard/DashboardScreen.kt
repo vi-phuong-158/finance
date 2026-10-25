@@ -4,15 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.components.*
-import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -48,9 +50,8 @@ fun DashboardScreen(
             .background(FinanceTheme.colors.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        // 1. Top Header: Title & Action
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -60,7 +61,7 @@ fun DashboardScreen(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = "Tổng quan tài chính",
+                    text = "Tổng quan",
                     style = FinanceTheme.typography.headlineLarge,
                     color = FinanceTheme.colors.textPrimary,
                 )
@@ -71,21 +72,21 @@ fun DashboardScreen(
                 )
             }
 
-            // Sync / status indicator button
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .background(FinanceTheme.colors.surfaceGlass, FinanceTheme.shapes.pill),
+                    .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.pill),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "⚡",
-                    style = FinanceTheme.typography.titleMedium,
+                Icon(
+                    imageVector = Icons.Rounded.Sync,
+                    contentDescription = "Đồng bộ",
+                    tint = FinanceTheme.colors.primary,
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
 
-        // 2. Main Balance Card (Visual Hero)
         BalanceCard(
             balanceText = data.formattedBalance,
             incomeText = data.formattedIncome,
@@ -93,37 +94,43 @@ fun DashboardScreen(
             periodLabel = data.periodLabel,
         )
 
-        // 3. Mini Metric Summary Cards
-        Row(
+        FinanceCard(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            shape = FinanceTheme.shapes.xLarge,
+            contentPadding = 18.dp,
         ) {
-            MetricCard(
-                title = "Thu nhập",
-                valueText = data.formattedIncome,
-                type = TransactionType.THU,
-                modifier = Modifier.weight(1f),
-            )
-            MetricCard(
-                title = "Chi tiêu",
-                valueText = data.formattedExpense,
-                type = TransactionType.CHI,
-                modifier = Modifier.weight(1f),
-            )
-            MetricCard(
-                title = "Tích lũy",
-                valueText = data.formattedNetDiff,
-                type = if (data.netDiff >= 0) TransactionType.THU else TransactionType.CHI,
-                modifier = Modifier.weight(1f),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                SectionHeader(title = "Tình hình thu chi")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SummaryStat(
+                        label = "Tổng thu",
+                        value = data.formattedIncome,
+                        valueColor = FinanceTheme.colors.income,
+                        modifier = Modifier.weight(1f),
+                    )
+                    SummaryStat(
+                        label = "Tổng chi",
+                        value = data.formattedExpense,
+                        valueColor = FinanceTheme.colors.expense,
+                        modifier = Modifier.weight(1f),
+                    )
+                    SummaryStat(
+                        label = "Chênh lệch",
+                        value = data.formattedNetDiff,
+                        valueColor = FinanceTheme.colors.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
 
-        // 4. Spending Chart
         SpendingChart()
 
-        // 5. Expense Categories Breakdown
         if (data.categories.isNotEmpty()) {
-            GlassCard(
+            FinanceCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = FinanceTheme.shapes.xLarge,
                 contentPadding = 18.dp,
@@ -132,9 +139,7 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    SectionHeader(
-                        title = "Danh mục chi tiêu",
-                    )
+                    SectionHeader(title = "Danh mục chi tiêu")
                     data.categories.take(5).forEach { category ->
                         CategoryProgress(category = category)
                     }
@@ -142,8 +147,7 @@ fun DashboardScreen(
             }
         }
 
-        // 6. Recent Transactions
-        GlassCard(
+        FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
             contentPadding = 18.dp,
@@ -174,6 +178,33 @@ fun DashboardScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(60.dp)) // Extra space for floating bottom bar
+        Spacer(modifier = Modifier.height(56.dp))
+    }
+}
+
+@Composable
+private fun SummaryStat(
+    label: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = label,
+            style = FinanceTheme.typography.caption,
+            color = FinanceTheme.colors.textMuted,
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = valueColor,
+            maxLines = 1,
+        )
     }
 }
