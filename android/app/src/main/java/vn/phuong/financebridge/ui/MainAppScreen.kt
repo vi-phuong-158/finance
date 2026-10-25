@@ -1,21 +1,20 @@
 package vn.phuong.financebridge.ui
 
 import android.content.Context
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import vn.phuong.financebridge.ui.components.FinanceBottomBar
 import vn.phuong.financebridge.ui.components.NavigationTab
 import vn.phuong.financebridge.ui.model.UiDashboard
-import vn.phuong.financebridge.ui.screens.add.AddTransactionDialog
+import vn.phuong.financebridge.ui.screens.accounts.AccountsScreen
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardRepository
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardScreen
+import vn.phuong.financebridge.ui.screens.record.RecordScreen
 import vn.phuong.financebridge.ui.screens.reports.ReportsScreen
 import vn.phuong.financebridge.ui.screens.settings.SettingsScreen
 import vn.phuong.financebridge.ui.screens.transactions.TransactionsScreen
@@ -28,7 +27,6 @@ fun MainAppScreen(
     modifier: Modifier = Modifier,
 ) {
     var currentTab by remember { mutableStateOf(NavigationTab.DASHBOARD) }
-    var showAddDialog by remember { mutableStateOf(false) }
 
     val repository = remember(context) { DashboardRepository(context) }
     val scope = rememberCoroutineScope()
@@ -56,15 +54,17 @@ fun MainAppScreen(
         loadData()
     }
 
+    val data = dashboardState ?: UiDashboard.preview()
+    val bottomBarTab = if (currentTab == NavigationTab.TRANSACTIONS) NavigationTab.ACCOUNTS else currentTab
+
     FinanceBridgeTheme {
         Scaffold(
             modifier = modifier.fillMaxSize(),
             containerColor = FinanceTheme.colors.background,
             bottomBar = {
                 FinanceBottomBar(
-                    currentTab = currentTab,
+                    currentTab = bottomBarTab,
                     onTabSelected = { currentTab = it },
-                    onAddClick = { showAddDialog = true },
                 )
             },
         ) { paddingValues ->
@@ -81,27 +81,30 @@ fun MainAppScreen(
                         onRefresh = { loadData() },
                         onViewAllTransactions = { currentTab = NavigationTab.TRANSACTIONS },
                     )
-                    NavigationTab.TRANSACTIONS -> TransactionsScreen(
-                        transactions = dashboardState?.recentTransactions ?: UiDashboard.preview().recentTransactions,
+
+                    NavigationTab.ACCOUNTS -> AccountsScreen(
+                        dashboardData = data,
+                        onViewTransactions = { currentTab = NavigationTab.TRANSACTIONS },
                     )
+
+                    NavigationTab.RECORD -> RecordScreen(
+                        onSave = { _, _, _, _ ->
+                            // UI-only in this phase. Manual write API is implemented in a later phase.
+                        },
+                    )
+
                     NavigationTab.REPORTS -> ReportsScreen(
-                        dashboardData = dashboardState ?: UiDashboard.preview(),
+                        dashboardData = data,
                     )
-                    NavigationTab.SETTINGS -> SettingsScreen(
+
+                    NavigationTab.MORE -> SettingsScreen(
                         context = context,
                     )
-                }
-            }
 
-            if (showAddDialog) {
-                AddTransactionDialog(
-                    onDismiss = { showAddDialog = false },
-                    onSave = { _, _, _, _ ->
-                        showAddDialog = false
-                        // Refresh data after saving
-                        loadData()
-                    },
-                )
+                    NavigationTab.TRANSACTIONS -> TransactionsScreen(
+                        transactions = data.recentTransactions,
+                    )
+                }
             }
         }
     }
