@@ -1,0 +1,171 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { parseMoneyLover } from '../lib/moneylover/parser.js';
+import { HISTORY_HEADERS, historyRow, parseBoolean, sumMoney } from '../lib/moneylover/schema.js';
+import { importMoneyLover, planImport } from '../lib/moneylover/importer.js';
+import type { HistorySnapshot, ImportPort } from '../lib/moneylover/importer.js';
+import { readMoneyLoverXlsx } from '../lib/moneylover/xlsx-reader.js';
+import { readHistoryRow } from '../lib/moneylover/history-reader.js';
+import { historyAppendRequests } from '../lib/moneylover/google-history.js';
+import { summarizeSource, reconcileSource } from '../lib/moneylover/report.js';
+import { sourceRow, sourceTable } from './moneylover-fixtures.js';
+
+test('Money Lover signed amounts, date-only, VND/JPY and source fields survive normalization', () => {
+  const result = parseMoneyLover(sourceTable(sourceRow(), sourceRow({ 3: 600000, 4: 'JPY' })));
+  assert.deepEqual(result.rejected, []);
+  const [chi, thu] = result.transactions;
+  assert.equal(chi.type, 'CHI'); assert.equal(chi.amount, 12500); assert.equal(chi.amountVnd, 12500);
+  assert.equal(chi.date, '2026-02-28'); assert.equal(chi.wallet, 'Wallet A'); assert.equal(chi.category, 'Cafe');
+  assert.equal(chi.note, 'Note\nsecond line'); assert.equal(chi.counterparty, 'Merchant A'); assert.equal(chi.event, 'Event A');
+  assert.equal(chi.member, 'Member A'); assert.equal(thu.type, 'THU'); assert.equal(thu.currency, 'JPY'); assert.equal(thu.amountVnd, null);
+  assert.deepEqual(readHistoryRow(historyRow(chi)), chi);
+});
+test('blank optional fields are preserved and exclusion flags have an explicit allowlist', () => {
+  const t = parseMoneyLover(sourceTable(sourceRow({ 6: '', 7: null, 8: undefined, 9: '' }))).transactions[0];
+  assert.equal(t.note, ''); assert.equal(t.counterparty, ''); assert.equal(t.event, ''); assert.equal(t.excludedFromReport, false);
+  for (const v of [true, 1, 'TRUE', 'Có', '✅', 'x']) assert.equal(parseBoolean(v), true);
+  for (const v of [false, 0, 'FALSE', 'Không', '', null, undefined]) assert.equal(parseBoolean(v), false);
+  for (const v of ['anything', 'maybe', 2, {}, []]) assert.throws(() => parseBoolean(v), /INVALID_EXCLUDED_FLAG/);
+});
+test('strict header, amount, currency, date and unmapped-column validation rejects without guessing', () => {
+  const cases = [sourceRow({ 3: 0 }), sourceRow({ 3: '-1,000' }), sourceRow({ 3: NaN }), sourceRow({ 3: 0.1 }),
+    sourceRow({ 3: Number.MAX_SAFE_INTEGER }), sourceRow({ 4: '' }), sourceRow({ 4: '¥' }),
+    sourceRow({ 1: '2026-02-30' }), sourceRow({ 1: '2026-02-28T00:00:00' }), sourceRow({ 9: 'maybe' }), sourceRow({ 11: 'unmapped' })];
+  for (const row of cases) assert.equal(parseMoneyLover(sourceTable(row)).rejected.length, 1);
+  const table = sourceTable(sourceRow()); table.rows[0].cells[4] = 'Unknown currency';
+  assert.throws(() => parseMoneyLover(table), /INVALID_MONEYLOVER_HEADERS/);
+  const duplicate = sourceTable(sourceRow()); duplicate.rows[0].cells.push('Ngày');
+  assert.throws(() => parseMoneyLover(duplicate), /INVALID_MONEYLOVER_HEADERS/);
+});
+test('Excel 1900/1904 serial dates and Vietnamese dates are handled without inventing transaction times', () => {
+  assert.equal(parseMoneyLover(sourceTable(sourceRow({ 1: 61 }))).transactions[0].date, '1900-03-01');
+  assert.equal(parseMoneyLover(sourceTable(sourceRow({ 1: 60 }))).rejected.length, 1);
+  assert.equal(parseMoneyLover(sourceTable(sourceRow({ 1: 61.5 }))).rejected.length, 1);
+  const table = sourceTable(sourceRow({ 1: 0 })); table.date1904 = true;
+  assert.equal(parseMoneyLover(table).transactions[0].date, '1904-01-01');
+  assert.equal(parseMoneyLover(sourceTable(sourceRow({ 1: '28/02/2026' }))).transactions[0].date, '2026-02-28');
+});
+test('deterministic multiset identity survives reordering/renumbering and preserves identical occurrences', () => {
+  const a = sourceRow(), b = sourceRow({ 3: -20000 });
+  const first = parseMoneyLover(sourceTable(a, a, b)), second = parseMoneyLover(sourceTable(b, sourceRow({ 0: 9 }), a));
+  assert.deepEqual(first.transactions.map((t) => t.legacyId).sort(), second.transactions.map((t) => t.legacyId).sort());
+  assert.equal(new Set(first.transactions.map((t) => t.legacyId)).size, 3); assert.equal(first.identicalRows, 1);
+  const changed = parseMoneyLover(sourceTable(sourceRow({ 6: 'changed' }))).transactions[0];
+  assert.notEqual(changed.legacyId, first.transactions[0].legacyId);
+});
+function memoryPort(): { port: ImportPort; snapshot: HistorySnapshot; writes: number; loseResponse: boolean } {
+  const state = { snapshot: { exists: false, headers: [], rows: [] } as HistorySnapshot, writes: 0, loseResponse: false,
+    port: {} as ImportPort };
+  state.port = { readHistory: async () => structuredClone(state.snapshot), appendHistory: async (rows, create) => {
+    state.writes++; if (create) { state.snapshot.exists = true; state.snapshot.headers = HISTORY_HEADERS; }
+    state.snapshot.rows.push(...rows); if (state.loseResponse) throw new Error('private-upstream-details');
+  } };
+  return state;
+}
+test('Sheets import request writes only the history tab and never evaluates formula-like source text', () => {
+  const t = parseMoneyLover(sourceTable(sourceRow({ 6: '=1+1' }))).transactions[0];
+  const first = historyAppendRequests([historyRow(t)], 7, true);
+  assert.equal(first.length, 2); assert.equal(first[0].addSheet!.properties.title, 'MoneyLover_History');
+  const cells = first[1].appendCells!;
+  assert.equal(cells.sheetId, 7); assert.equal(cells.rows[1].values[8].userEnteredValue.stringValue, '=1+1');
+  assert.equal(cells.rows[1].values[3].userEnteredValue.numberValue, 12500);
+  assert.equal(cells.rows[1].values[11].userEnteredValue.boolValue, false);
+  assert.equal(JSON.stringify(first).includes('formulaValue'), false);
+  const next = historyAppendRequests([historyRow(t)], 7, false);
+  assert.equal(next.length, 1); assert.equal(next[0].appendCells!.rows.length, 1);
+});
+test('dry-run writes nothing; first apply inserts all source occurrences; second apply skips all', async () => {
+  const parsed = parseMoneyLover(sourceTable(sourceRow(), sourceRow())), state = memoryPort();
+  assert.equal((await importMoneyLover(parsed, state.port)).pending, 2); assert.equal(state.writes, 0);
+  assert.equal((await importMoneyLover(parsed, state.port, true)).inserted, 2);
+  const again = await importMoneyLover(parsed, state.port, true);
+  assert.equal(again.inserted, 0); assert.equal(again.skipped, 2); assert.equal(state.writes, 1);
+});
+test('lost append response is reconciled by full readback; unavailable readback never reports success', async () => {
+  const parsed = parseMoneyLover(sourceTable(sourceRow())), state = memoryPort(); state.loseResponse = true;
+  assert.equal((await importMoneyLover(parsed, state.port, true)).status, 'IMPORTED_RECONCILED_AFTER_ERROR');
+  const uncertain = memoryPort();
+  uncertain.port.appendHistory = async () => { uncertain.port.readHistory = async () => { throw new Error(); }; throw new Error(); };
+  await assert.rejects(importMoneyLover(parsed, uncertain.port, true), /IMPORT_OUTCOME_UNKNOWN_READBACK_REQUIRED/);
+});
+test('bad source, wrong schema, duplicate IDs and altered historical data fail before writes', async () => {
+  const state = memoryPort(), good = parseMoneyLover(sourceTable(sourceRow()));
+  await assert.rejects(importMoneyLover(parseMoneyLover(sourceTable(sourceRow({ 9: 'unknown' }))), state.port, true), /SOURCE_ROWS_REJECTED/);
+  assert.equal(state.writes, 0);
+  assert.throws(() => planImport(good, { exists: true, headers: [], rows: [] }), /HISTORY_SCHEMA_MISMATCH/);
+  await importMoneyLover(good, state.port, true);
+  state.snapshot.rows[0][8] = 'manually changed';
+  assert.throws(() => planImport(good, state.snapshot), /HISTORY_CONTENT_CONFLICT/);
+  state.snapshot.rows.push([...state.snapshot.rows[0]]);
+  assert.throws(() => planImport(good, state.snapshot), /DUPLICATE_HISTORY_ID/);
+});
+test('concurrent historical edits block apply and never touch preexisting rows', async () => {
+  const state = memoryPort(), parsed = parseMoneyLover(sourceTable(sourceRow())); let reads = 0;
+  state.port.readHistory = async () => { reads++; return reads === 1 ? state.snapshot : { exists: true, headers: HISTORY_HEADERS, rows: [] }; };
+  await assert.rejects(importMoneyLover(parsed, state.port, true), /HISTORY_CHANGED_RETRY_DRY_RUN/); assert.equal(state.writes, 0);
+});
+test('reconciliation separates original currency and excluded rows from report totals', () => {
+  const parsed = parseMoneyLover(sourceTable(sourceRow(), sourceRow({ 3: 600000, 4: 'JPY' }), sourceRow({ 3: -30000, 9: '✅' })));
+  const summary = summarizeSource(parsed);
+  assert.equal(summary.totalsByCurrency.VND.expense, 42500); assert.equal(summary.reportVnd.expense, 12500);
+  assert.equal(summary.totalsByCurrency.JPY.income, 600000); assert.equal(summary.reportVnd.income, 0);
+  assert.equal(sumMoney([0.1, 0.2]), 0.3); assert.throws(() => sumMoney([Number.MAX_SAFE_INTEGER]), /INVALID_AMOUNT/);
+  assert.throws(() => sumMoney([0.0000001]), /INVALID_AMOUNT/);
+  assert.equal(reconcileSource(parsed, { rows: 3, expenseVnd: 42500, categoryExpenseVnd: { Cafe: 42500 } }).matches, true);
+  assert.equal(reconcileSource(parsed, { expenseVnd: 1 }).matches, false);
+  assert.throws(() => reconcileSource(parsed, {}), /INVALID_EXPECTATIONS/);
+});
+
+test('real XLSX reader handles sanitized shared/inline strings, sparse cells and numeric dates; rejects formulas', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'moneylover-fixture-')), path = join(dir, 'fixture.xlsx');
+  const builder = `import zipfile,json,sys,xml.sax.saxutils as X
+headers=json.loads(sys.argv[2])
+ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+cells=''.join('<c r="'+chr(65+i)+'1" t="inlineStr"><is><t>'+X.escape(h)+'</t></is></c>' for i,h in enumerate(headers))
+data='<row r="1">'+cells+'</row><row r="2"><c r="B2"><v>46081</v></c><c r="C2" t="s"><v>0</v></c><c r="D2"><v>-123</v></c><c r="E2" t="inlineStr"><is><t>VND</t></is></c><c r="F2" t="inlineStr"><is><t>Wallet</t></is></c></row>'
+with zipfile.ZipFile(sys.argv[1],'w') as z:
+ z.writestr('xl/workbook.xml','<workbook xmlns="'+ns+'" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Transaction" sheetId="1" r:id="rId1"/></sheets></workbook>')
+ z.writestr('xl/_rels/workbook.xml.rels','<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>')
+ z.writestr('xl/sharedStrings.xml','<sst xmlns="'+ns+'"><si><t>Cafe</t></si></sst>')
+ z.writestr('xl/worksheets/sheet1.xml','<worksheet xmlns="'+ns+'"><sheetData>'+data+'</sheetData></worksheet>')
+`;
+  const python = process.env.MONEYLOVER_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
+  const built = spawnSync(python, ['-c', builder, path, JSON.stringify(sourceTable(sourceRow()).rows[0].cells)], { encoding: 'utf8', windowsHide: true });
+  assert.equal(built.status, 0, built.stderr);
+  const before = await readFile(path), parsed = parseMoneyLover(await readMoneyLoverXlsx(path));
+  assert.deepEqual(parsed.rejected, []); assert.equal(parsed.transactions[0].category, 'Cafe');
+  assert.equal(parsed.transactions[0].amount, 123); assert.equal(parsed.transactions[0].date, '2026-02-28');
+  assert.deepEqual(await readFile(path), before);
+  const report = join(dir, 'dry-run.json'), expected = join(dir, 'expectations.json');
+  await writeFile(expected, JSON.stringify({ rows: 1, expenseVnd: 123 }));
+  const runCli = (...args: string[]) => spawnSync(process.execPath,
+    ['--import', 'tsx', 'scripts/import-moneylover.ts', '--file', path, ...args],
+    { cwd: new URL('..', import.meta.url), encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, SPREADSHEET_ID: '', GOOGLE_PRIVATE_KEY: 'private-marker-not-for-logs', MONEYLOVER_SOURCE_FILE: '' } });
+  const dryRun = runCli('--expectations', expected, '--report', report);
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  assert.equal(JSON.parse(dryRun.stdout).status, 'DRY_RUN_SOURCE_ONLY');
+  assert.equal(JSON.parse(await readFile(report, 'utf8')).reconciliation.matches, true);
+  assert.equal(runCli('--report', path).stderr.trim(), 'SOURCE_OVERWRITE_FORBIDDEN');
+  const apply = runCli('--apply');
+  assert.equal(apply.status, 1); assert.equal(apply.stderr.trim(), 'SERVER_CONFIGURATION_ERROR');
+  assert.equal(apply.stderr.includes('private-marker'), false);
+  await writeFile(expected, JSON.stringify({ rows: 99 }));
+  const mismatch = runCli('--apply', '--expectations', expected);
+  assert.equal(mismatch.status, 1); assert.equal(JSON.parse(mismatch.stdout).status, 'RECONCILIATION_MISMATCH');
+  assert.deepEqual(await readFile(path), before);
+  const mutate = `import zipfile,sys
+with zipfile.ZipFile(sys.argv[1]) as z: parts={n:z.read(n) for n in z.namelist()}
+parts['xl/worksheets/sheet1.xml']=parts['xl/worksheets/sheet1.xml'].replace(b'<v>-123</v>',b'<f>1+2</f><v>3</v>')
+with zipfile.ZipFile(sys.argv[1],'w') as z:
+ for n,d in parts.items():z.writestr(n,d)
+`;
+  assert.equal(spawnSync(python, ['-c', mutate, path], { windowsHide: true }).status, 0);
+  await assert.rejects(readMoneyLoverXlsx(path), /FORMULA_NOT_ALLOWED/);
+  await writeFile(join(dir, 'invalid.xlsx'), 'not a zip');
+  await assert.rejects(readMoneyLoverXlsx(join(dir, 'invalid.xlsx')), /XLSX_READ_FAILED/);
+});
