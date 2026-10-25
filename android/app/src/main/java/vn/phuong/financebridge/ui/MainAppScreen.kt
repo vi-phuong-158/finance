@@ -14,9 +14,9 @@ import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.screens.accounts.AccountsScreen
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardRepository
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardScreen
+import vn.phuong.financebridge.ui.screens.more.MoreScreen
 import vn.phuong.financebridge.ui.screens.record.RecordScreen
 import vn.phuong.financebridge.ui.screens.reports.ReportsScreen
-import vn.phuong.financebridge.ui.screens.settings.SettingsScreen
 import vn.phuong.financebridge.ui.screens.transactions.TransactionsScreen
 import vn.phuong.financebridge.ui.theme.FinanceBridgeTheme
 import vn.phuong.financebridge.ui.theme.FinanceTheme
@@ -97,7 +97,7 @@ fun MainAppScreen(
                         dashboardData = data,
                     )
 
-                    NavigationTab.MORE -> SettingsScreen(
+                    NavigationTab.MORE -> MoreScreen(
                         context = context,
                     )
 
