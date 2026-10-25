@@ -26,3 +26,9 @@ android/.kotlin/
 **/dist/
 **/.DS_Store
 
+# Private financial sources, import journals and reconciliation reports
+**/.private-data/
+**/*MoneyLover*.xlsx
+**/.moneylover-import.lock
+**/__pycache__/
+

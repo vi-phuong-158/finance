@@ -55,8 +55,8 @@ test('masks long account numbers even when the VCB reference is missing', () => 
 });
 test('keeps merchant classification specific and removes Vietnamese accents', () => {
   assert.equal(matchCategory('LOTTERIA', 'CHI'), 'Ăn uống');
-  assert.equal(matchCategory('NHÀ THUỐC LONG CHÂU', 'CHI'), 'Y tế');
+  assert.equal(matchCategory('NHÀ THUỐC LONG CHÂU', 'CHI'), 'Sức khỏe');
   assert.equal(matchCategory('LOTTE MART', 'CHI'), 'Siêu thị');
-  assert.equal(matchCategory('nhận lương', 'THU'), 'Thu nhập / Nhận CK');
+  assert.equal(matchCategory('nhận lương', 'THU'), 'Lương');
 });
 

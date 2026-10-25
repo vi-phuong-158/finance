@@ -11,6 +11,8 @@ Hướng dẫn cài đặt/pilot theo 12 bước: [VCB Production E2E](docs/VCB_
 
 Backend có `GET /api/health` (chỉ kiểm tra cấu hình cục bộ), `npm run sheets:bootstrap` (xem kế hoạch; thêm `-- --apply` để tạo tab/header còn thiếu) và `npm run check:deployment` (health + dry-run không ghi giao dịch). Hai lệnh đọc cấu hình riêng từ `vercel/.env.local`.
 
+Nhập lịch sử Money Lover và API đọc thu chi hợp nhất: [Money Lover History Import](docs/MONEYLOVER_HISTORY_IMPORT.md).
+
 ## Google Sheets
 
 Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `SPREADSHEET_ID` trong Vercel. Không đưa ID thật, secret hoặc khóa service account vào repository.
@@ -27,7 +29,7 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
    npm test
    npm run typecheck
    ```
-2. Import repo vào Vercel, đặt Root Directory = `vercel`, Framework = Other, Node 24.x, Install Command = `npm ci`; không đặt output frontend. Chỉ hai endpoint public nằm trong `api`, mã nội bộ nằm trong `lib`.
+2. Import repo vào Vercel, đặt Root Directory = `vercel`, Framework = Other, Node 24.x, Install Command = `npm ci`; không đặt output frontend. Handler HTTP nằm trong `api`, mã nội bộ nằm trong `lib`.
 3. Cài đặt bốn biến môi trường trong **Vercel Settings -> Environment Variables**. Dùng `.env.example` làm danh sách tên, rồi tự điền ID Sheet và thông tin service account. Không commit `.env`, `android/local.properties` hay khóa service account.
    - `SPREADSHEET_ID` = ID Sheet riêng tư
    - `WEBHOOK_SECRET` = chuỗi bí mật ngẫu nhiên được tạo riêng
