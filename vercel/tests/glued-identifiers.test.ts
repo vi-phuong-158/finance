@@ -20,7 +20,7 @@ test('glued 8+ digit runs are masked while short codes, amounts, dates and times
   assert.equal(maskSensitiveIdentifiers('Ref a999999999b'), 'Ref a***b');
   const ref = maskSensitiveIdentifiers('LE THI D Chuyen tien#SP#000000000000000000012026abc1111111.1111.1111.111111');
   assert.equal(LONG.test(ref), false); assert.ok(ref.startsWith('LE THI D Chuyen tien#SP#***abc'));
-  const kept = 'FT26059ABC123 A1234567B 6299BFTVGL8J2B7C 01-03-2026 18:50:44 -25,000 VND SD 999999999 VND +100000000';
+  const kept = 'FT26059ABC123 A1234567B 6299BFTVGL8J2B7C 01-03-2026 18:50:44 -25,000 VND SD 999999999 VND';
   assert.equal(maskSensitiveIdentifiers(kept), kept);
 });
 
@@ -60,4 +60,29 @@ test('Raw_Capture and manual notes also mask glued runs; eventId still hashes th
   const manual = manualRow({ requestId: '11111111-1111-4111-8111-111111111111', dateTime: '2026-02-28T09:00', type: 'CHI', amount: 1000,
     category: 'Ăn uống', account: 'CASH', note: `Chuyen TK${VIRTUAL}` });
   assert.equal(manual[6], 'Chuyen TKXY00Z***');
+});
+
+test('signed numbers without a currency unit are not amounts: +84 phones and signed refs are masked', async () => {
+  assert.equal(maskSensitiveIdentifiers('SĐT +84912345678'), 'SĐT +***');
+  assert.equal(maskSensitiveIdentifiers('REF +123456789012 va -123456789012'), 'REF +*** va -***');
+  assert.equal(maskSensitiveIdentifiers('SĐT +84 912 345 678'), 'SĐT +***');
+  const kept = 'GD +100000000 VND -25,000 VND +1.000.000 VND lúc 01-03-2026 18:50:44 -25,000';
+  assert.equal(maskSensitiveIdentifiers(kept), kept);
+  // Parsers read money from the raw text, so amounts are unaffected and the phone never reaches the row.
+  const vcb = parseVcb('Số dư TK VCB 9999999999 -25,000 VND lúc 01-03-2026 18:50:44. Số dư 147,322 VND. Ref MBVCB.FIXTURE.SHOP GIA LAP SDT +84912345678')!;
+  assert.deepEqual([vcb.amount, vcb.balance, vcb.type], [25000, 147322, 'CHI']);
+  assert.equal(/84912345678/.test(`${vcb.counterparty} ${vcb.description}`), false);
+  const ctg = parseVietinbank('Thời gian: 28/02/2026 09:42 Tài khoản: 123456789012 Giao dịch: +25,000 VND Số dư hiện tại: 125,000 VND Nội dung: NGUOI GUI GIA LAP lien he +84912345678')!;
+  assert.deepEqual([ctg.amount, ctg.balance, ctg.type], [25000, 125000, 'THU']);
+  assert.equal(/84912345678/.test(ctg.description), false);
+  const text = 'GD TK 9999999999 -100,000 VND POS FORMAT UNKNOWN LH +84912345678 REF -123456789012';
+  const raws: unknown[][] = [];
+  const port = async () => ({ readHeaders: async () => ({ transaction: TRANSACTION_HEADERS, raw: RAW_CAPTURE_HEADERS }),
+    readEventIds: async () => ({ transactionIds: [], rawIds: [] }),
+    appendTransaction: async () => { throw new Error('unexpected transaction'); }, appendRaw: async (row: unknown[]) => { raws.push(row); } });
+  const postedAt = Date.UTC(2026, 1, 28, 4);
+  const request = { method: 'POST', headers: { 'x-webhook-secret': SYNTHETIC_SECRET, 'content-type': 'application/json' },
+    body: { eventId: createEventId('VCB', postedAt, text), bank: 'VCB', packageName: 'com.VCB', title: '', text, postedAt } };
+  assert.equal((await validateAndProcessTransaction(request, testEnvironment(), port)).body.status, 'SAVED_RAW_CAPTURE');
+  assert.equal(String(raws[0][2]), 'GD TK *** -100,000 VND POS FORMAT UNKNOWN LH +*** REF -***');
 });
