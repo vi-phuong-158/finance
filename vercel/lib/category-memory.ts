@@ -9,6 +9,7 @@ export const MEMORY_HEADERS = ['request_id', 'action', 'identity_key', 'type', '
 export const MEMORY_WINDOW = 10;
 export const MEMORY_RULE_LIMIT = 2000;
 const SET_WEIGHT = 2;
+export const MAX_IDENTITY_TOKENS = 8;
 const TIER_FACTOR = { ACCOUNT: 1, COUNTERPARTY: 1, DESCRIPTION: 0.85 } as const;
 // Bank-generated markers only. Never merchant names: the system must learn categories, not hard-code them.
 export const TECHNICAL_TOKENS = new Set(['MBVCB', 'IBFT', 'REF', 'TRACE', 'FT', 'QR', 'POS', 'ECOM', 'NAPAS', 'CT', 'CK', 'GD', 'TK', 'ND', 'VND', 'DEN']);
@@ -17,20 +18,49 @@ export const IDENTITY_KEY = /^(?:ACCOUNT:(?:VCB|BIDV|VIETINBANK):[a-f0-9]{32}|(?
 
 export type IdentityType = keyof typeof TIER_FACTOR;
 export type Identity = { type: IdentityType; key: string; label: string };
-export type IdentitySource = { bank: string | null; counterpartyAccount?: string | null; counterparty: string | null; description: string | null };
+export type IdentitySource = { source: UnifiedTransaction['source']; bank: string | null; type: 'THU' | 'CHI';
+  counterpartyAccount?: string | null; counterparty: string | null; description: string | null };
 export type Observation = { transactionId: string; identity: Identity; type: 'THU' | 'CHI'; category: string; at: string };
 export type MemoryCommand = { requestId: string; action: 'SET' | 'DELETE' | 'RESET_ALL'; identityKey: string; type: '' | 'THU' | 'CHI'; category: string; createdAt: string };
 export type MemoryLevel = 'HINT' | 'AMBIGUOUS' | 'PRESELECT' | 'STRONG';
 export type MemoryRule = { key: string; identityType: IdentityType; label: string; type: 'THU' | 'CHI'; category: string; count: number; total: number;
   confidence: number; level: MemoryLevel; recent: string[]; lastUsedAt: string; pinned: boolean };
 
+const fold = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'D');
+
 // Twin of CategoryMemory.normalize in Kotlin; shared/category-memory-vectors.tsv must pass on both sides.
 export function normalizeMemoryText(text: string): string {
-  const tokens = text.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'D')
-    .replace(/[^A-Za-z0-9]+/g, ' ').toUpperCase().split(' ')
-    .filter((token) => token && !/\d/.test(token) && !TECHNICAL_TOKENS.has(token));
-  const normalized = tokens.slice(0, 8).join(' ');
+  const normalized = fold(text).replace(/[^A-Za-z0-9]+/g, ' ').toUpperCase().split(' ')
+    .filter((token) => token && !/\d/.test(token) && !TECHNICAL_TOKENS.has(token)).join(' ');
   return normalized.length >= 2 ? normalized : '';
+}
+
+// Never truncate: a shared prefix (sender name, "chuyen tien"...) must not merge two parties.
+// Text longer than MAX_IDENTITY_TOKENS is simply not an identity.
+export function memoryLabel(text: string): string {
+  const normalized = normalizeMemoryText(text);
+  return normalized.split(' ').length <= MAX_IDENTITY_TOKENS ? normalized : '';
+}
+
+const TRANSFER = /(?:^|[^A-Z0-9])CT TU (?:\*+|\d+) (.+?) TOI (?:\*+|\d+) (.+)$/;
+const TRANSFER_WORDS = / (?:CHUYEN TIEN|CHUYEN KHOAN|CK|IBFT|NAPAS|CT TU|CT DEN|CT DI|TRANSFER|TU .+ TOI) /;
+
+// Bank free text: "CT tu <acct> <SENDER> toi <acct> <RECEIVER> [tai <BANK>] [(...)]" yields the other party
+// (receiver for CHI, sender for THU). Any other transfer wording is ambiguous: the visible name is often
+// the owner, so it returns null rather than letting different recipients share one rule.
+export function extractBankParty(text: string, type: 'THU' | 'CHI'): { kind: 'PARTY' | 'TEXT'; name: string } | null {
+  const flat = fold(text).toUpperCase().replace(/\s+/g, ' ').trim();
+  const starts = flat.match(/(?:^|[^A-Z0-9])CT TU /g)?.length ?? 0;
+  if (starts === 1) {
+    const m = TRANSFER.exec(flat);
+    if (!m || / TOI /.test(` ${m[2]} `)) return null;
+    const receiver = m[2].replace(/\s*\([^()]*\)\s*$/, '').replace(/ TAI [A-Z0-9]+$/, '');
+    const name = memoryLabel(type === 'CHI' ? receiver : m[1]);
+    return name ? { kind: 'PARTY', name } : null;
+  }
+  if (starts > 1 || TRANSFER_WORDS.test(` ${flat.replace(/[^A-Z0-9]+/g, ' ').trim()} `)) return null;
+  const name = memoryLabel(text);
+  return name ? { kind: 'TEXT', name } : null;
 }
 
 export function memoryIdentityKey(secret: string): Buffer {
@@ -42,16 +72,28 @@ export function resolveIdentity(source: IdentitySource, hmacKey: Buffer): Identi
   if (/^\d{6,20}$/.test(account) && ['VCB', 'BIDV', 'VIETINBANK'].includes(source.bank ?? '')) {
     // Accounts are low-entropy: keyed HMAC so neither the Sheet nor the client cache can reverse them.
     const digest = createHmac('sha256', hmacKey).update(`${source.bank}:${account}`).digest('hex').slice(0, 32);
-    const name = normalizeMemoryText(source.counterparty ?? '');
+    const name = memoryLabel(source.counterparty ?? '');
     return { type: 'ACCOUNT', key: `ACCOUNT:${source.bank}:${digest}`, label: `${name || 'Tài khoản'} · ${source.bank} ••${account.slice(-4)}` };
   }
-  const party = source.counterparty === 'VCB Transaction' ? '' : normalizeMemoryText(source.counterparty ?? '');
-  if (party) return { type: 'COUNTERPARTY', key: `COUNTERPARTY:${party}`, label: party };
-  const description = normalizeMemoryText(source.description ?? '');
-  return description ? { type: 'DESCRIPTION', key: `DESCRIPTION:${description}`, label: description } : null;
+  const party = (name: string): Identity => ({ type: 'COUNTERPARTY', key: `COUNTERPARTY:${name}`, label: name });
+  const described = (name: string): Identity => ({ type: 'DESCRIPTION', key: `DESCRIPTION:${name}`, label: name });
+  if (source.source === 'BANK_NOTIFICATION') {
+    // VCB: the Ref-derived counterparty (its description is the same Ref, or the whole template when Ref is absent).
+    // BIDV/VietinBank: the content, without BIDV's per-transaction "Mã giao dịch" suffix.
+    const text = source.bank === 'VCB' ? (source.counterparty === 'VCB Transaction' ? '' : source.counterparty ?? '')
+      : (source.description ?? '').replace(/\s*·\s*Mã giao dịch:\s*\S+$/u, '');
+    const found = extractBankParty(text, source.type);
+    if (!found) return null;
+    return found.kind === 'PARTY' || source.bank === 'VCB' ? party(found.name) : described(found.name);
+  }
+  // Manual notes and Money Lover history are typed by the owner; no bank template to untangle.
+  const name = memoryLabel(source.counterparty ?? '');
+  if (name) return party(name);
+  const note = memoryLabel(source.description ?? '');
+  return note ? described(note) : null;
 }
 
-const identitySource = (t: UnifiedTransaction): IdentitySource => ({ bank: t.bank, counterparty: t.counterparty, description: t.description });
+const identitySource = (t: UnifiedTransaction): IdentitySource => ({ source: t.source, bank: t.bank, type: t.type, counterparty: t.counterparty, description: t.description });
 
 // Identity always comes from the ORIGINAL stored fields, never from an edited note or client input.
 export function originalIdentities(snapshot: FinanceSnapshot, hmacKey: Buffer): Map<string, Identity | null> {

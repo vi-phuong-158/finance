@@ -1,4 +1,4 @@
-# input<TAB>expected normalizeMemoryText. \uXXXX escapes are decoded by both test suites.
+# input<TAB>expected normalizeMemoryText (never truncated; identities additionally require <= 8 tokens). \uXXXX escapes are decoded by both test suites.
 GRAB REF111	GRAB
 GRAB REF999	GRAB
 GRAB*TRIP-ABC12	GRAB TRIP
@@ -10,7 +10,7 @@ MBVCB.***.***.NGUYEN VAN A chuyen tien	NGUYEN VAN A CHUYEN TIEN
 QR 12345 POS	
 A	
 Thanh toán Shopee đơn 240101ABC	THANH TOAN SHOPEE DON
-one two three four five six seven eight nine ten	ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT
+one two three four five six seven eight nine ten	ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT NINE TEN
 Café 12:30 28/02/2026	CAFE
 Nhà\u00a0thuốc Long Châu	NHA THUOC LONG CHAU
 Straße 5	STRA E

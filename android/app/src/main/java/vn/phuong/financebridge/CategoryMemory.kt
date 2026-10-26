@@ -40,13 +40,14 @@ object CategoryMemory {
     private val levels = setOf("HINT", "AMBIGUOUS", "PRESELECT", "STRONG")
 
     fun normalize(text: String): String {
-        val tokens = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[̀-ͯ]"), "").replace(Regex("[đĐ]"), "D")
+        val tokens = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("[\u0300-\u036f]"), "").replace(Regex("[đĐ]"), "D")
             .replace(Regex("[^A-Za-z0-9]+"), " ").uppercase().split(" ")
             .filter { it.isNotEmpty() && it.none(Char::isDigit) && it !in technical }
-        return tokens.take(8).joinToString(" ").takeIf { it.length >= 2 }.orEmpty()
+        return tokens.joinToString(" ").takeIf { it.length >= 2 }.orEmpty()
     }
 
-    fun descriptionKey(note: String): String? = normalize(note).takeIf { it.isNotEmpty() }?.let { "DESCRIPTION:$it" }
+    // Same rule as the server's memoryLabel: never truncate, longer notes are not an identity.
+    fun descriptionKey(note: String): String? = normalize(note).takeIf { it.isNotEmpty() && it.split(" ").size <= 8 }?.let { "DESCRIPTION:$it" }
 
     fun validKey(value: String?): Boolean = value != null && key.matches(value)
 

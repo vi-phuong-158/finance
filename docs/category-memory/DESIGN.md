@@ -43,8 +43,8 @@ Mỗi giao dịch có **tối đa một** identity — tầng cao nhất có d�
 | Tầng | Điều kiện | Khóa | Hệ số tin cậy |
 |---|---|---|---|
 | 1 `ACCOUNT` | Có số tài khoản đối tác có cấu trúc (6–20 chữ số sau khi bỏ khoảng trắng/`.`/`-`) và bank ∈ VCB/BIDV/VIETINBANK | `ACCOUNT:<BANK>:<HMAC-SHA256 32 hex>` | 1.00 |
-| 2 `COUNTERPARTY` | Có counterparty/merchant (VCB `Ref`, Money Lover "Với"); bỏ sentinel `VCB Transaction` | `COUNTERPARTY:<chuẩn hóa>` | 1.00 |
-| 3 `DESCRIPTION` | Chỉ khi không có tầng 1/2: nội dung/ghi chú | `DESCRIPTION:<chuẩn hóa>` | 0.85 |
+| 2 `COUNTERPARTY` | Bên kia của chuyển khoản tách được chắc chắn, merchant VCB `Ref` không phải chuyển khoản, Money Lover "Với" | `COUNTERPARTY:<chuẩn hóa>` | 1.00 |
+| 3 `DESCRIPTION` | Nội dung BIDV/VietinBank không phải chuyển khoản; ghi chú ghi tay/Money Lover | `DESCRIPTION:<chuẩn hóa>` | 0.85 |
 
 - Tầng 1 **khóa theo ngân hàng** (Case A: `VCB:123456` ≠ `BIDV:123456`). Số tài khoản không bao giờ lưu/trả về: khóa là HMAC với khóa con `HMAC(WEBHOOK_SECRET, "category-memory-identity-v1")` (số tài khoản ít entropy nên không dùng SHA thuần). Hiển thị chỉ `••1234`.
 - **Giới hạn trung thực:** hiện chưa parser nào cung cấp số tài khoản đối tác có cấu trúc và Sheet chỉ chứa bản đã che, nên tầng 1 có đầy đủ hợp đồng + test nhưng **chưa có nguồn dữ liệu**; giao dịch thật hiện rơi vào tầng 2/3. Thêm nguồn tầng 1 cần envelope ngân hàng được chủ dự án xác nhận (không đoán format).
@@ -58,9 +58,20 @@ Mỗi giao dịch có **tối đa một** identity — tầng cao nhất có d�
 2. Mọi ký tự ngoài `[A-Za-z0-9]` → khoảng trắng; uppercase ASCII; tách token.
 3. Bỏ token **chứa chữ số** (reference, mã GD, giờ, số tiền, `REF123`, phần đã che `***`).
 4. Bỏ token kỹ thuật cố định: `MBVCB IBFT REF TRACE FT QR POS ECOM NAPAS CT CK GD TK ND VND DEN`.
-5. Giữ tối đa 8 token đầu; kết quả < 2 ký tự → không có identity.
+5. **Không cắt bớt.** Identity chỉ hợp lệ khi kết quả 2 ký tự trở lên và **tối đa 8 token**; dài hơn → không có identity (không gợi ý) thay vì lấy 8 token đầu — tiền tố chung (tên người chuyển, "chuyen tien"…) không bao giờ gộp hai bên khác nhau.
 
 Ví dụ: `GRAB REF111`/`GRAB REF999` → `GRAB` (Case C); `CT TNHH TM VA DV SIEU THI AN LAC` → `TNHH TM VA DV SIEU THI AN LAC`.
+
+### Tách bên giao dịch từ nội dung ngân hàng (`extractBankParty`, hardening sau review PR #8)
+
+Nguồn văn bản: VCB dùng `counterparty` lấy từ `Ref` (không dùng description vì đó là cùng `Ref` hoặc cả template khi thiếu `Ref`); BIDV dùng nội dung đã bỏ hậu tố `· Mã giao dịch: …`; VietinBank dùng nội dung.
+
+1. Có **đúng một** cụm `CT tu <tài khoản/***> <NGƯỜI CHUYỂN> toi <tài khoản/***> <NGƯỜI NHẬN> [tai <NGÂN HÀNG>] [(...)]` → bên kia là **người nhận nếu CHI**, **người chuyển nếu THU** (hướng lấy từ giao dịch gốc). Bỏ đuôi `(...)` và đúng một token ` tai <NGÂN HÀNG>` ở cuối (tên có chữ "TAI" vẫn giữ). Kết quả là tầng `COUNTERPARTY`.
+2. Có dấu hiệu chuyển khoản khác (`chuyen tien`, `chuyen khoan`, `CK`, `IBFT`, `NAPAS`, `CT den/di`, `tu … toi`, nhiều cụm `CT tu`, `CT tu` thiếu tài khoản, nhiều `toi`) → **không có identity**. Lý do: tên hiển thị trong memo thường là chính chủ (vd `NGUYEN VAN CHU chuyen tien`) nên mọi người nhận sẽ bị gộp vào một rule.
+3. Không phải chuyển khoản (QR/POS/merchant) → toàn bộ văn bản chuẩn hóa (≤ 8 token): VCB → `COUNTERPARTY`, BIDV/VietinBank → `DESCRIPTION`.
+4. VCB không có `Ref` (`VCB Transaction`) → không có identity.
+
+Hệ quả có chủ đích: chuyển khoản không tách chắc được thì **không bao giờ** được gợi ý/chọn sẵn; người dùng vẫn chọn tay như cũ. Hai người trùng tên (không có số tài khoản) vẫn có thể chung rule — giới hạn còn lại cho tới khi có tầng 1.
 Đánh đổi chấp nhận: hai chi nhánh chỉ khác số (`… AN LAC 2`) gộp làm một — cùng chuỗi cửa hàng, cùng mục đích phân loại. Tên khác chữ không bao giờ bị gộp; không bỏ tiền tố pháp lý, không fuzzy match. Không có luật merchant cứng (không "Grab = Đi lại").
 
 ## 4. Quan sát (observation) và ngữ nghĩa sửa giao dịch

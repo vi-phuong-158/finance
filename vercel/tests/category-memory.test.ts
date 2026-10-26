@@ -14,6 +14,7 @@ import { HISTORY_HEADERS } from '../lib/moneylover/schema.js';
 import type { FinanceSnapshot } from '../lib/unified-transactions.js';
 import { parseVcb } from '../parsers/vcb.js';
 import { parseBidv } from '../parsers/bidv.js';
+import { parseVietinbank } from '../parsers/vietinbank.js';
 import { SYNTHETIC_SECRET, testEnvironment } from './support.js';
 
 // Every name, account, reference and amount below is synthetic.
@@ -59,30 +60,30 @@ test('shared normalization vectors match the Kotlin twin contract', () => {
 
 test('Tier 1 account identity: per bank, formatting-insensitive, keyed and never reversible from the key', () => {
   for (const bank of ['VCB', 'BIDV', 'VIETINBANK']) {
-    const a = resolveIdentity({ bank, counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: 'x' }, KEY)!;
-    const b = resolveIdentity({ bank, counterpartyAccount: '0123 456.789', counterparty: 'nguyễn văn a', description: 'other' }, KEY)!;
+    const a = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank, counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: 'x' }, KEY)!;
+    const b = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank, counterpartyAccount: '0123 456.789', counterparty: 'nguyễn văn a', description: 'other' }, KEY)!;
     assert.equal(a.type, 'ACCOUNT'); assert.equal(a.key, b.key);
     assert.match(a.key, new RegExp(`^ACCOUNT:${bank}:[a-f0-9]{32}$`));
     assert.equal(a.key.includes('0123456789') || a.label.includes('0123456789'), false);
     assert.match(a.label, /••6789$/);
   }
   // Case A: same digits, different bank.
-  const vcbKey = resolveIdentity({ bank: 'VCB', counterpartyAccount: '123456', counterparty: '', description: '' }, KEY)!.key;
-  const bidvKey = resolveIdentity({ bank: 'BIDV', counterpartyAccount: '123456', counterparty: '', description: '' }, KEY)!.key;
+  const vcbKey = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterpartyAccount: '123456', counterparty: '', description: '' }, KEY)!.key;
+  const bidvKey = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'BIDV', counterpartyAccount: '123456', counterparty: '', description: '' }, KEY)!.key;
   assert.notEqual(vcbKey, bidvKey);
   // Another deployment secret yields unrelated keys.
-  assert.notEqual(resolveIdentity({ bank: 'VCB', counterpartyAccount: '123456', counterparty: '', description: '' }, memoryIdentityKey('b'.repeat(64)))!.key, vcbKey);
+  assert.notEqual(resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterpartyAccount: '123456', counterparty: '', description: '' }, memoryIdentityKey('b'.repeat(64)))!.key, vcbKey);
   // Malformed accounts never become Tier 1.
   for (const bad of ['12345', '1'.repeat(21), '12AB5678', '']) {
-    assert.notEqual(resolveIdentity({ bank: 'VCB', counterpartyAccount: bad, counterparty: 'SHOP', description: '' }, KEY)?.type, 'ACCOUNT');
+    assert.notEqual(resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterpartyAccount: bad, counterparty: 'SHOP', description: '' }, KEY)?.type, 'ACCOUNT');
   }
-  assert.equal(resolveIdentity({ bank: null, counterpartyAccount: '0123456789', counterparty: '', description: '' }, KEY), null);
+  assert.equal(resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: null, counterpartyAccount: '0123456789', counterparty: '', description: '' }, KEY), null);
 });
 
 test('Case B: a shared name never merges different accounts; Tier 1 wins over Tier 2', () => {
-  const first = resolveIdentity({ bank: 'VCB', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
-  const second = resolveIdentity({ bank: 'VCB', counterpartyAccount: '9876543210', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
-  const nameOnly = resolveIdentity({ bank: 'VCB', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
+  const first = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
+  const second = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterpartyAccount: '9876543210', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
+  const nameOnly = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
   assert.equal(new Set([first.key, second.key, nameOnly.key]).size, 3);
   assert.equal(nameOnly.key, party);
   // Learning on one account never leaks into the ambiguous bare name or the other account.
@@ -94,21 +95,24 @@ test('Case B: a shared name never merges different accounts; Tier 1 wins over Ti
 test('Case C / Scenario 3: VCB merchant references normalize to one merchant identity', () => {
   const keys = ['GRAB REF111', 'GRAB REF222', 'GRAB REF333'].map((ref) => {
     const parsed = parseVcb(vcb(ref))!;
-    return resolveIdentity({ bank: parsed.bank, counterparty: parsed.counterparty, description: parsed.description }, KEY)!;
+    return resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: parsed.bank, counterparty: parsed.counterparty, description: parsed.description }, KEY)!;
   });
   assert.deepEqual(new Set(keys.map((k) => k.key)), new Set(['COUNTERPARTY:GRAB']));
-  assert.equal(resolveIdentity({ bank: 'VCB', counterparty: 'GRABFOOD', description: '' }, KEY)!.key, 'COUNTERPARTY:GRABFOOD');
+  assert.equal(resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterparty: 'GRABFOOD', description: '' }, KEY)!.key, 'COUNTERPARTY:GRABFOOD');
   assert.equal(normalizeMemoryText('SIEU THI AN LAC'), 'SIEU THI AN LAC');
   assert.notEqual(normalizeMemoryText('SIEU THI AN LAC'), normalizeMemoryText('SIEU THI AN PHU'));
 });
 
 test('description fallback: BIDV/VietinBank/manual without counterparty use a lower-confidence Tier 3 identity', () => {
   const bidv = parseBidv('BIDV xin thông báo tới Quý khách Thời gian giao dịch: 09:41 28/02/2026 Tài khoản thanh toán: 1234567890 Số tiền GD: -12,500 VND Số dư cuối: 87,500 VND Nội dung giao dịch: Thanh toan Dien luc FT26059111 Mã giao dịch: FT26059ABC123')!;
-  const identity = resolveIdentity({ bank: 'BIDV', counterparty: bidv.counterparty, description: bidv.description }, KEY)!;
+  const identity = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'BIDV', counterparty: bidv.counterparty, description: bidv.description }, KEY)!;
   assert.equal(identity.type, 'DESCRIPTION');
-  assert.equal(identity.key, 'DESCRIPTION:THANH TOAN DIEN LUC MA GIAO DICH');
-  assert.equal(resolveIdentity({ bank: 'VCB', counterparty: 'VCB Transaction', description: 'Internet thang' }, KEY)!.key, 'DESCRIPTION:INTERNET THANG');
-  assert.equal(resolveIdentity({ bank: null, counterparty: '', description: '123456 ***' }, KEY), null);
+  assert.equal(identity.key, 'DESCRIPTION:THANH TOAN DIEN LUC');
+  assert.equal(resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VIETINBANK', counterparty: '', description: 'Internet thang' }, KEY)!.key, 'DESCRIPTION:INTERNET THANG');
+  // Ref-less VCB stores the whole template as description: it must never become one shared identity.
+  assert.equal(resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterparty: 'VCB Transaction', description: 'Số dư TK VCB *** -100,000 VND lúc 01-01-2026 12:00:00. Số dư 1 VND.' }, KEY), null);
+  assert.equal(resolveIdentity({ source: 'MANUAL', type: 'CHI', bank: null, counterparty: '', description: 'Chuyển tiền cho mẹ' }, KEY)!.key, 'DESCRIPTION:CHUYEN TIEN CHO ME');
+  assert.equal(resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: null, counterparty: '', description: '123456 ***' }, KEY), null);
   const tier2 = buildMemoryIndex(observe(party, ['Gia đình', 'Gia đình', 'Gia đình', 'Gia đình', 'Ăn uống']), [])[0];
   const tier3 = buildMemoryIndex(observe('DESCRIPTION:INTERNET', ['Gia đình', 'Gia đình', 'Gia đình', 'Gia đình', 'Ăn uống']), [])[0];
   assert.equal(tier2.confidence, 0.8); assert.equal(tier2.level, 'STRONG');
@@ -165,7 +169,7 @@ test('Scenario 1: three confirmations then the fourth transaction from the same 
   const rule = find(rules(ledger), record.memoryKey)!;
   assert.deepEqual([rule.category, rule.count, rule.total, rule.level], ['Gia đình', 3, 3, 'PRESELECT']);
   // Tier 1 contract for the same scenario once a parser exposes a structured account.
-  const account = resolveIdentity({ bank: 'VCB', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
+  const account = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
   const strict = buildMemoryIndex([0, 1, 2].map((i) => ({ transactionId: `t${i}`, identity: account, type: 'CHI' as const, category: 'Gia đình', at: at(i) })), []);
   assert.deepEqual([strict[0].category, strict[0].level], ['Gia đình', 'PRESELECT']);
   const disabled = await readFinance({ method: 'GET', headers: { 'x-webhook-secret': SYNTHETIC_SECRET }, query: {} }, testEnvironment(),
@@ -272,8 +276,8 @@ test('rule management: SET preselects and can still be overridden, DELETE and RE
 });
 
 test('Scenario 4: the same account number at another bank never inherits a rule', () => {
-  const vcbIdentity = resolveIdentity({ bank: 'VCB', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
-  const bidvIdentity = resolveIdentity({ bank: 'BIDV', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
+  const vcbIdentity = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
+  const bidvIdentity = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'BIDV', counterpartyAccount: '0123456789', counterparty: 'NGUYEN VAN A', description: '' }, KEY)!;
   const list = buildMemoryIndex([0, 1, 2].map((i) => ({ transactionId: `t${i}`, identity: vcbIdentity, type: 'CHI' as const, category: 'Gia đình', at: at(i) })), []);
   assert.ok(find(list, vcbIdentity.key));
   assert.equal(find(list, bidvIdentity.key), undefined);
@@ -338,4 +342,86 @@ test('logs and responses never expose the secret, account digits or transaction 
     }
   } finally { Object.assign(console, originals); }
   assert.deepEqual(captured, []);
+});
+
+// Synthetic replica of the long VCB transfer Ref layout: "<ref>.<ref>.<SENDER> chuyen tien.CT tu <acct> <SENDER> toi <acct> <RECEIVER> tai <BANK>".
+// Every name, account and reference is fake; parseVcb masks the digit runs exactly as in production.
+const OWNER = 'NGUYEN VAN CHU';
+const vcbTransfer = (sign: '-' | '+', ref: string, sender: string, receiver: string, tail = ' tai Techcombank') =>
+  `Số dư TK VCB 999999999999 ${sign}150,000 VND lúc 01-03-2026 09:15:22. Số dư 1,234,567 VND. Ref MBVCB.${ref}.${sender} chuyen tien.CT tu 0011001234567 ${sender} toi 1903456789012 ${receiver}${tail}`;
+const vcbIdentity = (text: string) => {
+  const parsed = parseVcb(text)!;
+  assert.ok(parsed, text);
+  assert.equal(/\d{8,}/.test(parsed.counterparty), false);
+  return resolveIdentity({ source: 'BANK_NOTIFICATION', bank: parsed.bank, type: parsed.type, counterparty: parsed.counterparty, description: parsed.description }, KEY);
+};
+
+test('VCB long transfer: the receiver (CHI) or sender (THU) is the identity, never the owner or a truncated prefix', () => {
+  const store = 'CT TNHH TM VA DV SIÊU THỊ AN LẠC';
+  const a = vcbIdentity(vcbTransfer('-', '12345678901.567890', OWNER, store));
+  const b = vcbIdentity(vcbTransfer('-', '98765432109.123456', OWNER, store, ' tai VIETINBANK (0912345678)'));
+  assert.deepEqual([a?.type, a?.key], ['COUNTERPARTY', 'COUNTERPARTY:TNHH TM VA DV SIEU THI AN LAC']);
+  assert.equal(b?.key, a?.key);
+  // Same sender, different stores.
+  assert.equal(vcbIdentity(vcbTransfer('-', '12345678901.567890', OWNER, 'CT TNHH TM VA DV SIÊU THỊ AN PHÚ'))?.key, 'COUNTERPARTY:TNHH TM VA DV SIEU THI AN PHU');
+  // Personal transfers to A and B, including masked suffixes after the name.
+  const toA = vcbIdentity(vcbTransfer('-', '11111111111.222222', OWNER, 'TRAN THI A_123456789012'))!;
+  const toB = vcbIdentity(vcbTransfer('-', '11111111111.222222', OWNER, 'LE VAN B'))!;
+  assert.deepEqual([toA.key, toB.key], ['COUNTERPARTY:TRAN THI A', 'COUNTERPARTY:LE VAN B']);
+  // A receiver whose name contains the word TAI keeps it; only a trailing " tai <BANK>" is removed.
+  assert.equal(vcbIdentity(vcbTransfer('-', '11111111111.222222', OWNER, 'NGUYEN VAN TAI', ' tai BIDV'))?.key, 'COUNTERPARTY:NGUYEN VAN TAI');
+  // Incoming money: the sender is the counterparty, the receiver is the owner.
+  assert.equal(vcbIdentity(vcbTransfer('+', '33333333333.444444', 'TRAN THI A', OWNER, ' tai VCB'))?.key, 'COUNTERPARTY:TRAN THI A');
+  for (const identity of [a, toA, toB]) assert.equal(identity!.key.includes('CHU'), false);
+});
+
+test('uncertain bank text yields no identity, so nothing can be preselected wrongly', () => {
+  const head = 'Số dư TK VCB 999999999999 -150,000 VND lúc 01-03-2026 09:15:22. Số dư 1 VND.';
+  const uncertain = [
+    `${head} Ref MBVCB.12345678901.567890.${OWNER} chuyen tien`,
+    `${head} Ref MBVCB.12345678901.567890.CK tu ${OWNER} toi LE VAN B`,
+    vcbTransfer('-', '12345678901.567890', OWNER, `LE VAN B CT tu 0011001234567 ${OWNER} toi 1903456789012 TRAN THI A`),
+    vcbTransfer('-', '12345678901.567890', OWNER, 'LE VAN B toi 1903456789012 TRAN THI A'),
+    vcbTransfer('-', '12345678901.567890', OWNER, 'CONG TY CO PHAN DICH VU THUONG MAI VA DAU TU PHAT TRIEN AN LAC'),
+    `${head} Ref MBVCB.12345678901.567890.CT tu ${OWNER} toi LE VAN B`,
+    head,
+  ];
+  for (const text of uncertain) assert.equal(vcbIdentity(text), null, text);
+  // Long merchant texts that share an 8-token prefix are no longer merged by truncation.
+  const longText = (who: string) => resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB',
+    counterparty: `THANH TOAN HOA DON DIEN THANG MUOI CHO KHACH ${who}`, description: '' }, KEY);
+  assert.equal(longText('NGUYEN VAN A'), null); assert.equal(longText('TRAN THI B'), null);
+  // Learning on those transactions creates no rule at all.
+  const ledger = new Ledger();
+  for (const text of uncertain.slice(0, 2)) {
+    const parsed = parseVcb(text)!;
+    for (let i = 0; i < 3; i++) ledger.confirm(ledger.add({ counterparty: parsed.counterparty, description: parsed.description }), 'Gia đình');
+  }
+  assert.deepEqual(rules(ledger), []);
+});
+
+test('VietinBank and BIDV transfer contents use the same party extraction', () => {
+  const CTG = 'Thời gian: 28/02/2026 09:42 Tài khoản: 123456789012 Giao dịch: +25,000 VND Số dư hiện tại: 125,000 VND Nội dung: CT DEN:TESTREF1 MBVCB.TESTREF2.NGUOI GUI THU NGHIEM chuyen tien.CT tu 2345678901 NGUOI GUI THU NGHIEM toi 0912345678 NGUOI NHAN THU NGHIEM_123456789012 tai VIETINBANK (0912345678)';
+  for (const [sign, expected] of [['+', 'COUNTERPARTY:NGUOI GUI THU NGHIEM'], ['-', 'COUNTERPARTY:NGUOI NHAN THU NGHIEM']] as const) {
+    const parsed = parseVietinbank(CTG.replace('+25,000', `${sign}25,000`))!;
+    assert.equal(resolveIdentity({ source: 'BANK_NOTIFICATION', bank: parsed.bank, type: parsed.type, counterparty: parsed.counterparty, description: parsed.description }, KEY)?.key, expected);
+  }
+  const bidv = parseBidv(`BIDV xin thông báo tới Quý khách Thời gian giao dịch: 09:41 28/02/2026 Tài khoản thanh toán: 1234567890 Số tiền GD: -12,500 VND Số dư cuối: 87,500 VND Nội dung giao dịch: ${OWNER} chuyen tien Mã giao dịch: FT26059ABC123`)!;
+  assert.equal(resolveIdentity({ source: 'BANK_NOTIFICATION', bank: 'BIDV', type: bidv.type, counterparty: bidv.counterparty, description: bidv.description }, KEY), null);
+});
+
+test('end to end: three confirmations for one store preselect only that store, not another store from the same sender', async () => {
+  const ledger = new Ledger();
+  const add = (text: string) => { const p = parseVcb(text)!; return ledger.add({ counterparty: p.counterparty, description: p.description }); };
+  for (const ref of ['10000000001.100001', '10000000002.100002', '10000000003.100003']) ledger.confirm(add(vcbTransfer('-', ref, OWNER, 'CT TNHH TM VA DV SIÊU THỊ AN LẠC')), 'Siêu thị');
+  const sameStore = add(vcbTransfer('-', '10000000004.100004', OWNER, 'CT TNHH TM VA DV SIÊU THỊ AN LẠC'));
+  const otherStore = add(vcbTransfer('-', '10000000005.100005', OWNER, 'CT TNHH TM VA DV SIÊU THỊ AN PHÚ'));
+  const page = await readFinance({ method: 'GET', headers: { 'x-webhook-secret': SYNTHETIC_SECRET }, query: {} }, testEnvironment({ CATEGORY_MEMORY_ENABLED: '1' }),
+    async () => ({ readFinance: async () => ledger.snapshot() }), 'transactions');
+  const keyOf = (id: string) => ((page.body as Record<string, unknown>).transactions as { id: string; memoryKey: string | null }[]).find((t) => t.id === id)!.memoryKey;
+  const list = rules(ledger);
+  assert.deepEqual([find(list, keyOf(sameStore)!)?.category, find(list, keyOf(sameStore)!)?.level], ['Siêu thị', 'PRESELECT']);
+  assert.notEqual(keyOf(otherStore), keyOf(sameStore));
+  assert.equal(find(list, keyOf(otherStore)!), undefined);
+  assert.equal(list.length, 1);
 });

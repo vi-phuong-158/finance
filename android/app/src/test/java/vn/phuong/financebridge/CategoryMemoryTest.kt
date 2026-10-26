@@ -30,6 +30,9 @@ class CategoryMemoryTest {
         }
         assertEquals("DESCRIPTION:AN SANG", CategoryMemory.descriptionKey("Ăn sáng"))
         assertNull(CategoryMemory.descriptionKey("12345 ***"))
+        // Never truncated: a long note is not an identity, so two long notes with a shared prefix cannot merge.
+        assertNull(CategoryMemory.descriptionKey("thanh toan hoa don dien thang muoi cho khach nguyen van a"))
+        assertEquals("DESCRIPTION:CHUYEN TIEN CHO ME", CategoryMemory.descriptionKey("Chuyển tiền cho mẹ"))
     }
 
     @Test fun suggestionShownWithoutPreselectForSingleOrAmbiguousHistory() {
