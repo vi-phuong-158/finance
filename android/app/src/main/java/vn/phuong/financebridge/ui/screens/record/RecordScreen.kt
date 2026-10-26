@@ -1,5 +1,6 @@
 package vn.phuong.financebridge.ui.screens.record
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +14,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
+import java.util.UUID
+import vn.phuong.financebridge.ManualDraft
+import vn.phuong.financebridge.ManualOutbox
+import vn.phuong.financebridge.ManualSyncWorker
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +57,8 @@ enum class ExtendedTransactionType(val label: String, val isEnabled: Boolean) {
 
 @Composable
 fun RecordScreen(
-    onSave: (TransactionType, Long, String, String) -> Unit,
+    context: Context,
+    onSaved: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var selectedType by remember { mutableStateOf(ExtendedTransactionType.CHI) }
@@ -51,19 +66,36 @@ fun RecordScreen(
     var description by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Ăn uống") }
     var selectedAccount by remember { mutableStateOf("Vietcombank") }
+    var requestId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    var dateText by rememberSaveable { mutableStateOf(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).format(DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm"))) }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var queueCounts by remember { mutableStateOf(0 to 0) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        while (true) {
+            queueCounts = withContext(Dispatchers.IO) { ManualOutbox(context).use { it.counts() } }
+            delay(1500)
+        }
+    }
 
-    val categories = listOf(
+    val categories = if (selectedType == ExtendedTransactionType.THU) listOf(
+        CategoryItem("Lương", Icons.Rounded.Payments, Color(0xFF28A765)),
+        CategoryItem("Thu nhập khác", Icons.Rounded.Add, Color(0xFF42A5F5)),
+        CategoryItem("Tiền chuyển đến", Icons.Rounded.AccountBalance, Color(0xFF26A69A)),
+    ) else listOf(
         CategoryItem("Ăn uống", Icons.Rounded.Restaurant, Color(0xFFEF5350)),
-        CategoryItem("Xăng xe", Icons.Rounded.LocalGasStation, Color(0xFFFFA726)),
+        CategoryItem("Xăng", Icons.Rounded.LocalGasStation, Color(0xFFFFA726)),
         CategoryItem("Con cái", Icons.Rounded.ChildCare, Color(0xFF42A5F5)),
         CategoryItem("Mua sắm", Icons.Rounded.ShoppingCart, Color(0xFFAB47BC)),
-        CategoryItem("Nhà ở", Icons.Rounded.Home, Color(0xFF26A69A)),
+        CategoryItem("Gia đình", Icons.Rounded.Home, Color(0xFF26A69A)),
         CategoryItem("Sức khỏe", Icons.Rounded.MedicalServices, Color(0xFFEC407A)),
         CategoryItem("Giải trí", Icons.Rounded.SportsEsports, Color(0xFF7E57C2)),
-        CategoryItem("Khác", Icons.Rounded.MoreHoriz, Color(0xFF78909C)),
+        CategoryItem("Các chi phí khác", Icons.Rounded.MoreHoriz, Color(0xFF78909C)),
     )
 
     val accounts = listOf("Vietcombank", "VietinBank", "BIDV", "Tiền mặt")
+    LaunchedEffect(selectedType) { selectedCategory = categories.first().name }
 
     Column(
         modifier = modifier
@@ -260,42 +292,54 @@ fun RecordScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = FinanceTheme.shapes.medium,
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Thời gian ghi nhận",
-                        style = FinanceTheme.typography.caption,
-                        color = FinanceTheme.colors.textMuted,
-                    )
-                    Text(
-                        text = "Hôm nay",
-                        style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                        color = FinanceTheme.colors.textPrimary,
-                    )
-                }
+                OutlinedTextField(dateText, { dateText = it }, label = { Text("Ngày giờ (dd/MM/yyyy HH:mm)") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
             }
         }
 
-        // 6. Action Button (Explicitly disabled with clear truthful guidance)
         PrimaryButton(
-            text = "Lưu giao dịch (sắp hỗ trợ)",
-            enabled = false,
+            text = if (saving) "Đang lưu…" else "Lưu giao dịch",
+            enabled = !saving,
             onClick = {
-                val domType = if (selectedType == ExtendedTransactionType.THU) TransactionType.THU else TransactionType.CHI
-                onSave(
-                    domType,
-                    amountText.toLongOrNull() ?: 0L,
-                    selectedCategory,
-                    description,
-                )
+                val draft = runCatching {
+                    val date = LocalDateTime.parse(dateText, DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm").withResolverStyle(ResolverStyle.STRICT))
+                    ManualDraft(requestId, date.format(DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm")),
+                        if (selectedType == ExtendedTransactionType.THU) "THU" else "CHI", amountText.toLong(), selectedCategory,
+                        when (selectedAccount) { "Vietcombank" -> "VCB"; "VietinBank" -> "VIETINBANK"; "BIDV" -> "BIDV"; else -> "CASH" }, description).also { it.validate() }
+                }.getOrNull()
+                if (draft == null) {
+                    message = "Kiểm tra số tiền (1 đến 1.000 tỷ đồng), ngày giờ và ghi chú tối đa 1.024 byte."
+                } else {
+                    saving = true
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
+                                ManualOutbox(context).use { it.enqueue(draft) }
+                                ManualSyncWorker.schedule(context)
+                            }
+                            message = "Đã lưu trên máy. Giao dịch sẽ xuất hiện trong sổ sau khi đồng bộ."
+                            requestId = UUID.randomUUID().toString()
+                            amountText = ""; description = ""
+                            onSaved()
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (_: Exception) { message = "Chưa lưu được giao dịch. Vui lòng thử lại." }
+                        finally { saving = false }
+                    }
+                }
             },
         )
 
+        message?.let { Text(it, style = FinanceTheme.typography.bodyMedium) }
+        Text("${queueCounts.first} thay đổi đang chờ đồng bộ · ${queueCounts.second} cần xử lý", style = FinanceTheme.typography.caption)
+        androidx.compose.material3.TextButton(onClick = {
+            scope.launch {
+                withContext(Dispatchers.IO) { ManualOutbox(context).use { it.retryBlocked() } }
+                ManualSyncWorker.schedule(context)
+            }
+        }) { Text("Gửi lại giao dịch đang chờ") }
+
         Text(
-            text = "Chức năng ghi chép thủ công chưa được kết nối API lưu dữ liệu. Các biến động số dư tự động từ thông báo ngân hàng vẫn được cập nhật tự động bình thường.",
+            text = "Giao dịch được giữ trên máy khi mất mạng. Nếu cần gửi lại, hãy kiểm tra mã kết nối trong Khác. Không nhập lại cùng giao dịch để tránh trùng.",
             style = FinanceTheme.typography.caption,
             color = FinanceTheme.colors.textMuted,
             textAlign = TextAlign.Center,

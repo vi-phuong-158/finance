@@ -9,7 +9,7 @@ export function buildDashboard(rows: UnifiedTransaction[], query: FinanceQuery, 
     const expense = sumMoney(ts.filter((t) => t.type === 'CHI').map((t) => t.amount));
     return { income, expense, net: sumMoney([income, -expense]) };
   };
-  const groups = (key: 'category' | 'accountOrWallet') => {
+  const groups = (key: 'category' | 'accountOrWallet' | 'bank' | 'source' | 'date') => {
     const map = new Map<string | null, UnifiedTransaction[]>();
     for (const t of rows) { const list = map.get(t[key]) ?? []; list.push(t); map.set(t[key], list); }
     return [...map].map(([name, transactions]) => ({ name, transactionCount: transactions.length,
@@ -21,6 +21,8 @@ export function buildDashboard(rows: UnifiedTransaction[], query: FinanceQuery, 
     possibleDuplicateCount: rows.filter((t) => t.possibleDuplicate).length,
     duplicatePolicy: 'FLAG_ONLY_TOTALS_MAY_INCLUDE_BOTH_SOURCES',
     categorySummary: groups('category'), accountSummary: groups('accountOrWallet'),
+    bankSummary: groups('bank'), sourceSummary: groups('source'),
+    dailySummary: groups('date').sort((a, b) => a.name!.localeCompare(b.name!)),
     recentTransactions: rows.slice(0, 10), lastUpdatedAt: now.toISOString(),
     lastUpdatedAtMeaning: 'READ_AT_NOT_SOURCE_MODIFIED_AT' };
 }

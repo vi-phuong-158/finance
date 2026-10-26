@@ -1,6 +1,8 @@
 package vn.phuong.financebridge.ui
 
 import android.content.Context
+import vn.phuong.financebridge.ManualSyncWorker
+import vn.phuong.financebridge.ui.screens.interest.InterestScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -8,6 +10,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import vn.phuong.financebridge.ui.components.FinanceBottomBar
 import vn.phuong.financebridge.ui.components.NavigationTab
 import vn.phuong.financebridge.ui.model.UiDashboard
@@ -27,6 +30,7 @@ fun MainAppScreen(
     modifier: Modifier = Modifier,
 ) {
     var currentTab by remember { mutableStateOf(NavigationTab.DASHBOARD) }
+    var showInterest by remember { mutableStateOf(false) }
 
     val repository = remember(context) { DashboardRepository(context) }
     val scope = rememberCoroutineScope()
@@ -34,11 +38,13 @@ fun MainAppScreen(
     var dashboardState by remember { mutableStateOf<UiDashboard?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var loadJob by remember { mutableStateOf<Job?>(null) }
 
     fun loadData() {
+        loadJob?.cancel()
         isLoading = true
         errorMessage = null
-        scope.launch {
+        loadJob = scope.launch {
             val result = repository.fetchDashboard()
             result.onSuccess { data ->
                 dashboardState = data
@@ -51,10 +57,10 @@ fun MainAppScreen(
     }
 
     LaunchedEffect(Unit) {
+        ManualSyncWorker.schedule(context)
         loadData()
     }
 
-    val data = dashboardState ?: UiDashboard.preview()
     val bottomBarTab = if (currentTab == NavigationTab.TRANSACTIONS) NavigationTab.ACCOUNTS else currentTab
 
     FinanceBridgeTheme {
@@ -64,7 +70,7 @@ fun MainAppScreen(
             bottomBar = {
                 FinanceBottomBar(
                     currentTab = bottomBarTab,
-                    onTabSelected = { currentTab = it },
+                    onTabSelected = { showInterest = false; currentTab = it; if (it == NavigationTab.DASHBOARD) loadData() },
                 )
             },
         ) { paddingValues ->
@@ -73,7 +79,9 @@ fun MainAppScreen(
                     .fillMaxSize()
                     .padding(paddingValues),
             ) {
-                when (currentTab) {
+                if (showInterest) {
+                    InterestScreen(context = context, onBack = { showInterest = false })
+                } else when (currentTab) {
                     NavigationTab.DASHBOARD -> DashboardScreen(
                         dashboardState = dashboardState,
                         isLoading = isLoading,
@@ -83,18 +91,17 @@ fun MainAppScreen(
                     )
 
                     NavigationTab.ACCOUNTS -> AccountsScreen(
-                        dashboardData = data,
+                        onViewInterest = { showInterest = true },
                         onViewTransactions = { currentTab = NavigationTab.TRANSACTIONS },
                     )
 
                     NavigationTab.RECORD -> RecordScreen(
-                        onSave = { _, _, _, _ ->
-                            // UI-only in this phase. Manual write API is implemented in a later phase.
-                        },
+                        context = context,
+                        onSaved = { loadData() },
                     )
 
                     NavigationTab.REPORTS -> ReportsScreen(
-                        dashboardData = data,
+                        context = context,
                     )
 
                     NavigationTab.MORE -> MoreScreen(
@@ -102,7 +109,7 @@ fun MainAppScreen(
                     )
 
                     NavigationTab.TRANSACTIONS -> TransactionsScreen(
-                        transactions = data.recentTransactions,
+                        context = context,
                     )
                 }
             }

@@ -7,6 +7,11 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 object FinanceFormatters {
     private val vietnamLocale = Locale("vi", "VN")
@@ -16,11 +21,12 @@ object FinanceFormatters {
         groupingSeparator = '.'
     })
 
+    @Synchronized
     fun formatVnd(amount: Long, includeSign: Boolean = false, isIncome: Boolean? = null): String {
         val absAmount = kotlin.math.abs(amount)
         val formattedNumber = vndNumberFormat.format(absAmount)
         val sign = when {
-            !includeSign -> ""
+            !includeSign -> if (amount < 0) "-" else ""
             isIncome == true -> "+"
             isIncome == false -> "-"
             amount > 0 -> "+"
@@ -53,22 +59,20 @@ object FinanceFormatters {
         }
     }
 
+    fun formatIsoDate(date: String): String = LocalDate.parse(date).format(DateTimeFormatter.ofPattern("dd/MM/uuuu"))
+
+    fun formatAnnualRate(rate: Double): String {
+        require(rate.isFinite() && rate >= 0 && rate <= 1)
+        return java.math.BigDecimal.valueOf(rate).multiply(java.math.BigDecimal.valueOf(100))
+            .stripTrailingZeros().toPlainString().replace('.', ',') + "%/năm"
+    }
+
     fun parseIsoDateToMillis(isoString: String?): Long {
-        if (isoString.isNullOrBlank()) return System.currentTimeMillis()
-        val formats = listOf(
-            "yyyy-MM-dd'T'HH:mm:ssXXX",
-            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
-            "yyyy-MM-dd'T'HH:mm:ss",
-            "yyyy-MM-dd",
-        )
-        for (pattern in formats) {
-            try {
-                val sdf = SimpleDateFormat(pattern, Locale.US).apply { timeZone = vietnamTimeZone }
-                val parsed = sdf.parse(isoString)
-                if (parsed != null) return parsed.time
-            } catch (_: Exception) {
-            }
+        require(!isoString.isNullOrBlank()) { "INVALID_DATE" }
+        val zone = ZoneId.of("Asia/Ho_Chi_Minh")
+        if (isoString.length == 10) return LocalDate.parse(isoString).atStartOfDay(zone).toInstant().toEpochMilli()
+        return runCatching { OffsetDateTime.parse(isoString).toInstant().toEpochMilli() }.getOrElse {
+            LocalDateTime.parse(isoString).atZone(zone).toInstant().toEpochMilli()
         }
-        return System.currentTimeMillis()
     }
 }

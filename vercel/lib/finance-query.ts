@@ -35,7 +35,7 @@ export function parseFinanceQuery(input: Record<string, unknown>, dashboard = fa
     } else if (!result.from || !result.to) throw new Error('INVALID_QUERY');
   }
   if (result.from && result.to && result.from > result.to) throw new Error('INVALID_QUERY');
-  const enums: Record<string, string[]> = { type: ['THU', 'CHI'], bank: ['VCB', 'BIDV', 'VIETINBANK'], source: ['MONEYLOVER', 'BANK_NOTIFICATION'] };
+  const enums: Record<string, string[]> = { type: ['THU', 'CHI'], bank: ['VCB', 'BIDV', 'VIETINBANK'], source: ['MONEYLOVER', 'BANK_NOTIFICATION', 'MANUAL'] };
   for (const key of ['type', 'bank', 'source'] as const) {
     if (q[key] !== undefined) { if (!enums[key].includes(q[key])) throw new Error('INVALID_QUERY'); result[key] = q[key]; }
   }

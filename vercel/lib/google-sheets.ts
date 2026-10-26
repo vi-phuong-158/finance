@@ -1,3 +1,5 @@
+import { atomicAppendRequests, guardedAppend } from './atomic-append.js';
+
 export async function makeGoogleSheetsPort(config: {
   spreadsheetId: string;
   clientEmail: string;
@@ -14,6 +16,18 @@ export async function makeGoogleSheetsPort(config: {
 
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = config.spreadsheetId;
+  async function appendOnce(title: string, row: unknown[], idIndex: number) {
+    const eventId = String(row[idIndex]);
+    const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets(properties(sheetId,title))' });
+    const sheetId = meta.data.sheets?.find((s) => s.properties?.title === title)?.properties?.sheetId;
+    if (sheetId == null) throw new Error('SHEET_NOT_FOUND');
+    return guardedAppend(() => sheets.spreadsheets.batchUpdate({ spreadsheetId,
+      requestBody: { requests: atomicAppendRequests(sheetId, eventId, row) } }), async () => {
+      const range = title === 'Transactions' ? 'Transactions!I:I' : 'Raw_Capture!D:D';
+      const ids = await sheets.spreadsheets.values.get({ spreadsheetId, range, majorDimension: 'COLUMNS' });
+      return (ids.data.values?.[0] ?? []).includes(eventId);
+    });
+  }
 
   return {
     async readHeaders() {
@@ -40,20 +54,10 @@ export async function makeGoogleSheetsPort(config: {
       };
     },
     async appendTransaction(row: unknown[]) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: 'Transactions!A:I',
-        valueInputOption: 'RAW',
-        requestBody: { values: [row] },
-      });
+      return appendOnce('Transactions', row, 8);
     },
     async appendRaw(row: unknown[]) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: 'Raw_Capture!A:D',
-        valueInputOption: 'RAW',
-        requestBody: { values: [row] },
-      });
+      return appendOnce('Raw_Capture', row, 3);
     },
   };
 }

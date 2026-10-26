@@ -1,4 +1,4 @@
-import { hasExpectedHeaders, SHEET_SCHEMAS } from './sheet-schema.js';
+import { hasExpectedHeaders, hasTransactionHeaders, SHEET_SCHEMAS } from './sheet-schema.js';
 
 export type SheetSnapshot = { id: number; title: string; type: string; rows: unknown[][] };
 export type BootstrapRequest =
@@ -20,8 +20,9 @@ export function planSheetsBootstrap(sheets: SheetSnapshot[]): BootstrapRequest[]
     if (sheet && (sheet.type !== 'GRID' || !Number.isInteger(sheet.id))) throw new Error('SHEET_SCHEMA_MISMATCH');
     const empty = !sheet || !sheet.rows.some((row) => row.some(nonempty));
     if (!empty) {
-      if (!hasExpectedHeaders(sheet.rows[0] ?? [], headers)
-        || sheet.rows.some((row) => row.slice(headers.length).some(nonempty))) throw new Error('SHEET_SCHEMA_MISMATCH');
+      const actual = sheet.rows[0] ?? [];
+      if (!(title === 'Transactions' ? hasTransactionHeaders(actual) : hasExpectedHeaders(actual, headers))
+        || sheet.rows.some((row) => row.slice(actual.length).some(nonempty))) throw new Error('SHEET_SCHEMA_MISMATCH');
       continue;
     }
     const sheetId = sheet?.id ?? nextId++;

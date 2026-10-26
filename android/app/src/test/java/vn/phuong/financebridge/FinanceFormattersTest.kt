@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vn.phuong.financebridge.ui.model.TransactionType
-import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.util.FinanceFormatters
 
@@ -54,13 +53,25 @@ class FinanceFormattersTest {
     }
 
     @Test
-    fun dashboardPreviewContainsExpectedStructure() {
-        val dashboard = UiDashboard.preview()
-        assertTrue(dashboard.categories.isNotEmpty())
-        assertTrue(dashboard.recentTransactions.isNotEmpty())
-        assertEquals(1581, dashboard.totalTransactionsCount)
-        assertEquals(779604930L, dashboard.monthlyIncome)
-        assertEquals(569649820L, dashboard.monthlyExpense)
-        assertEquals(209955110L, dashboard.totalBalance)
+    fun parsesDateOnlyAtVietnamMidnightAndRejectsCorruptDates() {
+        assertEquals(1709139600000L, FinanceFormatters.parseIsoDateToMillis("2024-02-29"))
+        assertEquals("29/02/2024", FinanceFormatters.formatIsoDate("2024-02-29"))
+        listOf(null, "", "2026-02-30", "2026-01-01garbage").forEach { date ->
+            assertTrue(runCatching { FinanceFormatters.parseIsoDateToMillis(date) }.isFailure)
+        }
+    }
+
+    @Test
+    fun negativeNetFlowNeverLosesItsSign() {
+        assertEquals("-12.500\u00A0đ", FinanceFormatters.formatVnd(-12500L))
+        assertEquals("-12.500\u00A0đ", FinanceFormatters.formatVnd(-12500L, includeSign = true))
+    }
+
+    @Test
+    fun annualRateUsesVietnameseDecimalAndRejectsInvalidValues() {
+        assertEquals("5,9%/năm", FinanceFormatters.formatAnnualRate(0.059))
+        assertEquals("12%/năm", FinanceFormatters.formatAnnualRate(0.12))
+        assertEquals("0%/năm", FinanceFormatters.formatAnnualRate(0.0))
+        assertTrue(runCatching { FinanceFormatters.formatAnnualRate(Double.NaN) }.isFailure)
     }
 }

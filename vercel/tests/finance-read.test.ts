@@ -14,7 +14,7 @@ import { TRANSACTION_HEADERS } from '../lib/sheet-schema.js';
 test('Sheets read ranges fit actual grids, enforce the allowlist and fail before truncating oversized sources', () => {
   const tabs = [{ title: 'Transactions', rows: 1000, columns: 26, type: 'GRID' },
     { title: 'MoneyLover_History', rows: 2000, columns: 15, type: 'GRID' }];
-  assert.deepEqual(financeReadRanges(tabs), ["'Transactions'!A1:J1000", "'MoneyLover_History'!A1:O2000"]);
+  assert.deepEqual(financeReadRanges(tabs), ["'Transactions'!A1:L1000", "'MoneyLover_History'!A1:O2000"]);
   assert.throws(() => financeReadRanges(tabs.slice(0, 1)), /FINANCE_SCHEMA_MISMATCH/);
   assert.throws(() => financeReadRanges([{ ...tabs[0], rows: 50002 }, tabs[1]]), /FINANCE_SOURCE_LIMIT_EXCEEDED/);
   assert.throws(() => financeReadRanges([{ ...tabs[0], columns: 8 }, tabs[1]]), /FINANCE_SCHEMA_MISMATCH/);
@@ -52,6 +52,29 @@ test('dashboard excludes internal transfers and excluded source rows from VND to
   assert.equal(d.categorySummary.find((c) => c.name === 'Chuyển nội bộ')!.expense, 0);
   assert.equal(d.accountSummary.find((a) => a.name === 'Wallet A')!.expense, 12500);
 });
+test('report dimensions reconcile to eligible totals; real empty sources produce empty series', async () => {
+  const snapshot = financeFixture();
+  snapshot.bank.push(['01/03/2026 00:01', 'VCB', 'CHI', 42000, '', '', 'Synthetic next month', 'Ăn uống', '3'.repeat(64)]);
+  const rows = fromFinanceSnapshot(snapshot);
+  const q = parseFinanceQuery({ from: '2026-02-28', to: '2026-03-01' }, true);
+  const dashboard = buildDashboard(filterTransactions(rows, q), q);
+  for (const groups of [dashboard.dailySummary, dashboard.bankSummary, dashboard.sourceSummary, dashboard.categorySummary]) {
+    assert.equal(groups.reduce((sum, row) => sum + row.income, 0), dashboard.income);
+    assert.equal(groups.reduce((sum, row) => sum + row.expense, 0), dashboard.expense);
+    assert.equal(groups.reduce((sum, row) => sum + row.net, 0), dashboard.net);
+  }
+  assert.deepEqual(dashboard.dailySummary.map((row) => row.name), ['2026-02-28', '2026-03-01']);
+  assert.equal(dashboard.dailySummary[1].expense, 42000);
+  const empty = buildDashboard([], q);
+  assert.equal(empty.net, 0);
+  assert.deepEqual(empty.dailySummary, []);
+  assert.deepEqual(empty.bankSummary, []);
+  const denied = await readFinance({ method: 'GET', headers: { 'x-webhook-secret': SYNTHETIC_SECRET } }, testEnvironment(),
+    async () => ({ readFinance: async () => { throw new Error('private upstream detail'); } }), 'dashboard');
+  assert.equal(denied.httpStatus, 503);
+  assert.deepEqual(denied.body, { error: 'FINANCE_READ_UNAVAILABLE' });
+});
+
 test('date periods include leap days and use Vietnam timezone for the default current month', () => {
   const current = parseFinanceQuery({}, true, new Date('2026-01-31T18:00:00Z'));
   assert.equal(current.from, '2026-02-01'); assert.equal(current.to, '2026-02-28');

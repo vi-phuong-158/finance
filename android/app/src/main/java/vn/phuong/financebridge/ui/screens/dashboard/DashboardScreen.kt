@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -44,7 +45,10 @@ fun DashboardScreen(
         return
     }
 
-    val data = dashboardState ?: UiDashboard.preview()
+    val data = dashboardState ?: run {
+        EmptyState(title = "Chưa có dữ liệu", subtitle = "Tải lại để xem thu chi.")
+        return
+    }
 
     Column(
         modifier = modifier
@@ -81,18 +85,18 @@ fun DashboardScreen(
                     .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.pill),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
+                TextButton(onClick = onRefresh, enabled = !isLoading) { Icon(
                     imageVector = Icons.Rounded.Sync,
                     contentDescription = "Đồng bộ",
                     tint = FinanceTheme.colors.primary,
                     modifier = Modifier.size(22.dp),
-                )
+                ) }
             }
         }
 
         // 2. Hero Card: Tài chính hiện tại (Gradient HeroStart -> HeroEnd, 34sp Bold)
         BalanceCard(
-            balanceText = data.formattedBalance,
+            balanceText = data.formattedNetDiff,
             incomeText = data.formattedIncome,
             expenseText = data.formattedExpense,
             periodLabel = data.periodLabel,
@@ -133,7 +137,14 @@ fun DashboardScreen(
         }
 
         // 4. Biểu đồ xu hướng chi tiêu
-        SpendingChart()
+        if (errorMessage != null) ErrorState(message = errorMessage, onRetry = onRefresh)
+        if (data.possibleDuplicateCount > 0) {
+            Text("Có giao dịch có thể trùng giữa nguồn nhập lịch sử và ngân hàng. Cần đối soát trước khi dùng tổng số.",
+                color = FinanceTheme.colors.expense, style = FinanceTheme.typography.bodyMedium)
+        }
+        if (data.hasReportBreakdowns) SpendingChart(daily = data.daily)
+        else Text("Máy chủ chưa cung cấp dữ liệu xu hướng. Cần cập nhật kết nối để xem đầy đủ báo cáo.",
+            color = FinanceTheme.colors.textMuted, style = FinanceTheme.typography.bodyMedium)
 
         // 5. Danh mục chi tiêu
         if (data.categories.isNotEmpty()) {
