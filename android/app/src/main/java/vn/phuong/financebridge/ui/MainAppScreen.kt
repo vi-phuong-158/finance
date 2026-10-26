@@ -1,6 +1,7 @@
 package vn.phuong.financebridge.ui
 
 import android.content.Context
+import vn.phuong.financebridge.ui.screens.interest.InterestScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,7 @@ fun MainAppScreen(
     modifier: Modifier = Modifier,
 ) {
     var currentTab by remember { mutableStateOf(NavigationTab.DASHBOARD) }
+    var showInterest by remember { mutableStateOf(false) }
 
     val repository = remember(context) { DashboardRepository(context) }
     val scope = rememberCoroutineScope()
@@ -64,7 +66,7 @@ fun MainAppScreen(
             bottomBar = {
                 FinanceBottomBar(
                     currentTab = bottomBarTab,
-                    onTabSelected = { currentTab = it },
+                    onTabSelected = { showInterest = false; currentTab = it },
                 )
             },
         ) { paddingValues ->
@@ -73,7 +75,9 @@ fun MainAppScreen(
                     .fillMaxSize()
                     .padding(paddingValues),
             ) {
-                when (currentTab) {
+                if (showInterest) {
+                    InterestScreen(context = context, onBack = { showInterest = false })
+                } else when (currentTab) {
                     NavigationTab.DASHBOARD -> DashboardScreen(
                         dashboardState = dashboardState,
                         isLoading = isLoading,
@@ -84,6 +88,7 @@ fun MainAppScreen(
 
                     NavigationTab.ACCOUNTS -> AccountsScreen(
                         dashboardData = data,
+                        onViewInterest = { showInterest = true },
                         onViewTransactions = { currentTab = NavigationTab.TRANSACTIONS },
                     )
 

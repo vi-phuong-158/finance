@@ -20,9 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import vn.phuong.financebridge.ui.components.FinanceCard
-import vn.phuong.financebridge.ui.components.SecondaryButton
 import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -30,9 +28,9 @@ import vn.phuong.financebridge.ui.theme.FinanceTheme
 fun AccountsScreen(
     dashboardData: UiDashboard,
     onViewTransactions: () -> Unit,
+    onViewInterest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var showLoanPlaceholder by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -127,7 +125,7 @@ fun AccountsScreen(
         FinanceCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { showLoanPlaceholder = true },
+                .clickable(onClick = onViewInterest),
             shape = FinanceTheme.shapes.xLarge,
             contentPadding = 16.dp,
         ) {
@@ -160,60 +158,6 @@ fun AccountsScreen(
         Spacer(modifier = Modifier.height(56.dp))
     }
 
-    if (showLoanPlaceholder) {
-        Dialog(onDismissRequest = { showLoanPlaceholder = false }) {
-            Surface(
-                shape = FinanceTheme.shapes.xLarge,
-                color = FinanceTheme.colors.surfaceCard,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.pill),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Percent,
-                            contentDescription = null,
-                            tint = FinanceTheme.colors.primary,
-                            modifier = Modifier.size(28.dp),
-                        )
-                    }
-
-                    Text(
-                        text = "Theo dõi tiền lãi",
-                        style = FinanceTheme.typography.titleLarge,
-                        color = FinanceTheme.colors.textPrimary,
-                    )
-
-                    Text(
-                        text = "Tính năng đang được hoàn thiện",
-                        style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = FinanceTheme.colors.primary,
-                    )
-
-                    Text(
-                        text = "Theo dõi các khoản cho vay, lãi suất và lịch thu lãi định kỳ sẽ được hỗ trợ trong các phiên bản cập nhật tới.",
-                        style = FinanceTheme.typography.bodyMedium,
-                        color = FinanceTheme.colors.textSecondary,
-                        lineHeight = 20.sp,
-                    )
-
-                    SecondaryButton(
-                        text = "Đóng",
-                        onClick = { showLoanPlaceholder = false },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable

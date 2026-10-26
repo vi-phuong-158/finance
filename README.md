@@ -64,3 +64,7 @@ Dedup đọc toàn bộ cột ID của cả hai tab; không còn cửa sổ 1.00
 
 Workflow `.github/workflows/ci.yml` chạy `npm ci`, `npm test`, `npm run typecheck` trên Node 24.11.0 và `assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy validateReleaseWebhookConfig` cùng security scan trên JDK 17/Android SDK 34.
 Workflow `.github/workflows/build-pilot-apk.yml` build public-safe APK và upload artifact `finance-bridge-vcb-pilot-apk` khi được kích hoạt qua `workflow_dispatch`.
+
+
+## Theo dõi tiền lãi
+Tài khoản → Theo dõi tiền lãi dùng kỳ tháng 25–25 và sổ Google Sheets hiện tại. Cấu hình, quy tắc và giới hạn nghiệm thu: [INTEREST_TRACKING](docs/INTEREST_TRACKING.md).

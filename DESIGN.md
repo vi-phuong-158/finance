@@ -696,3 +696,7 @@ Tóm tắt bằng một câu:
 Khi phải lựa chọn giữa “giống MISA hơn” và “dễ dùng + đúng nghiệp vụ dự án hơn”, ưu tiên **đúng nghiệp vụ dự án**.
 
 Khi phải lựa chọn giữa hiệu ứng đẹp và độ tin cậy dữ liệu, ưu tiên **độ tin cậy dữ liệu**.
+
+
+## Bổ sung 26/10/2026: kỳ lãi tháng
+Màn Theo dõi tiền lãi dùng Lãi kỳ hiện tại · chưa chốt, Lãi đã chốt, Lãi đến hạn còn thu, kỳ 25–25 và lịch sử từng đợt/thu tiền. Nhãn Lãi hôm nay ở mô tả cũ được thay thế. Thiếu kết nối hiển thị lỗi thật, không dùng dữ liệu mẫu. Giữ font Be Vietnam Pro, theme và component hiện có.
