@@ -11,13 +11,15 @@ import org.json.JSONObject
 import vn.phuong.financebridge.BuildConfig
 import vn.phuong.financebridge.WebhookConfiguration
 import vn.phuong.financebridge.WebhookCredentialStore
+import vn.phuong.financebridge.ui.util.FinanceFormatters
 import java.util.concurrent.TimeUnit
 
-data class InterestEntry(val date: String, val label: String, val amount: Long)
+data class InterestEntry(val date: String, val label: String, val amount: Long, val maturity: String? = null)
 data class InterestLoan(
     val id: String, val name: String, val principal: Long, val due: Long,
     val currentInterest: Long, val paid: Long, val status: String,
     val disbursements: List<InterestEntry>, val payments: List<InterestEntry>,
+    val disbursed: Long, val accrued: Long, val maturity: String?,
 )
 data class InterestDashboard(
     val asOf: String, val from: String, val to: String, val principal: Long,
@@ -61,8 +63,9 @@ class InterestRepository(context: Context) {
         (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
             InterestEntry(item.getString("date"),
-                if (disbursement) "Giải ngân · ${item.getDouble("annualRate") * 100}%/năm" else item.getString("type"),
-                item.getLong(if (disbursement) "principal" else "amount"))
+                if (disbursement) "Giải ngân · ${FinanceFormatters.formatAnnualRate(item.getDouble("annualRate"))}" else item.getString("type"),
+                item.getLong(if (disbursement) "principal" else "amount"),
+                if (disbursement && !item.isNull("maturity")) item.getString("maturity") else null)
         }
 
     private fun parse(json: JSONObject): InterestDashboard {
@@ -72,9 +75,12 @@ class InterestRepository(context: Context) {
         val rows = json.getJSONArray("loans")
         val loans = (0 until rows.length()).map { index ->
             val item = rows.getJSONObject(index)
+            val disbursements = entries(item.getJSONArray("disbursements"), true)
             InterestLoan(item.getString("id"), item.getString("name"), item.getLong("outstandingPrincipal"),
                 item.getLong("interestDue"), item.getLong("currentInterest"), item.getLong("paidInterest"),
-                item.getString("status"), entries(item.getJSONArray("disbursements"), true), entries(item.getJSONArray("payments"), false))
+                item.getString("status"), disbursements, entries(item.getJSONArray("payments"), false),
+                disbursements.filter { it.date <= json.getString("asOf") }.sumOf { it.amount }, item.getLong("accruedInterest"),
+                if (item.isNull("maturity")) null else item.getString("maturity"))
         }
         return InterestDashboard(json.getString("asOf"), period.getString("from"), period.getString("to"),
             totals.getLong("outstandingPrincipal"), totals.getLong("accruedInterest"), totals.getLong("paidInterest"),

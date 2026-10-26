@@ -1,271 +1,120 @@
 package vn.phuong.financebridge.ui.screens.reports
 
+import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.TrendingUp
-import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import vn.phuong.financebridge.ui.components.*
 import vn.phuong.financebridge.ui.model.UiDashboard
+import vn.phuong.financebridge.ui.model.UiPeriodMetric
+import vn.phuong.financebridge.ui.screens.dashboard.DashboardRepository
 import vn.phuong.financebridge.ui.theme.FinanceTheme
-
-data class ReportGridItem(val title: String, val subtitle: String, val icon: ImageVector, val tint: Color)
+import vn.phuong.financebridge.ui.util.FinanceFormatters
+import vn.phuong.financebridge.ui.util.FinancePeriod
 
 @Composable
-fun ReportsScreen(
-    dashboardData: UiDashboard = UiDashboard.preview(),
-    modifier: Modifier = Modifier,
-) {
-    var selectedReportPeriod by remember { mutableStateOf("Tháng này") }
-    val reportPeriods = listOf("Tháng này", "Quý 4/2026", "Năm 2026")
-    var selectedReportFeature by remember { mutableStateOf<String?>(null) }
+fun ReportsScreen(context: Context, modifier: Modifier = Modifier) {
+    val repository = remember(context) { DashboardRepository(context) }
+    var period by remember { mutableStateOf(FinancePeriod.MONTH) }
+    var from by remember { mutableStateOf("") }
+    var to by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(FinancePeriod.MONTH.query()) }
+    var inputError by remember { mutableStateOf<String?>(null) }
+    var data by remember { mutableStateOf<UiDashboard?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var revision by remember { mutableStateOf(0) }
+    var customApplied by remember { mutableStateOf(false) }
 
-    val reportGridItems = listOf(
-        ReportGridItem("Phân tích chi tiêu", "Chi tiết theo danh mục", Icons.Rounded.PieChart, Color(0xFFEF5350)),
-        ReportGridItem("Phân tích thu", "Nguồn thu nhập", Icons.AutoMirrored.Rounded.TrendingUp, Color(0xFF28A765)),
-        ReportGridItem("Theo dõi vay nợ", "Khoản vay và cho vay", Icons.Rounded.AccountBalance, Color(0xFFFFA726)),
-        ReportGridItem("Đối tượng thu/chi", "Người nhận và người trả", Icons.Rounded.People, Color(0xFF42A5F5)),
-        ReportGridItem("Chuyến đi / Sự kiện", "Thu chi theo sự kiện", Icons.Rounded.Flight, Color(0xFFAB47BC)),
-        ReportGridItem("Phân tích tài chính", "Xu hướng dài hạn", Icons.Rounded.Insights, Color(0xFF08A9D6)),
-    )
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(FinanceTheme.colors.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Text(
-            text = "Báo cáo tài chính",
-            style = FinanceTheme.typography.headlineLarge,
-            color = FinanceTheme.colors.textPrimary,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-
-        // Period filter chips
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            reportPeriods.forEach { period ->
-                FinanceChip(
-                    text = period,
-                    isSelected = selectedReportPeriod == period,
-                    onClick = { selectedReportPeriod = period },
-                )
-            }
-        }
-
-        // Summary Card: Thu, Chi, Chênh lệch
-        FinanceCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 12.dp,
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeader(title = "Tình hình thu chi")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    ReportStatItem(
-                        title = "Tổng thu",
-                        value = dashboardData.formattedIncome,
-                        color = FinanceTheme.colors.income,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ReportStatItem(
-                        title = "Tổng chi",
-                        value = dashboardData.formattedExpense,
-                        color = FinanceTheme.colors.expense,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ReportStatItem(
-                        title = "Chênh lệch",
-                        value = dashboardData.formattedNetDiff,
-                        color = FinanceTheme.colors.textPrimary,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-
-        // Spending Trend Chart
-        SpendingChart()
-
-        // Expense Category Breakdown
-        if (dashboardData.categories.isNotEmpty()) {
-            FinanceCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = FinanceTheme.shapes.xLarge,
-                contentPadding = 18.dp,
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    SectionHeader(title = "Cơ cấu chi tiêu")
-                    dashboardData.categories.forEach { cat ->
-                        CategoryProgress(category = cat)
-                    }
-                }
-            }
-        }
-
-        // 2-column Reports Grid (DESIGN.md)
-        Text(
-            text = "Báo cáo chuyên sâu",
-            style = FinanceTheme.typography.titleMedium,
-            color = FinanceTheme.colors.textPrimary,
-        )
-
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            reportGridItems.chunked(2).forEach { pair ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    pair.forEach { item ->
-                        FinanceCard(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { selectedReportFeature = item.title },
-                            shape = FinanceTheme.shapes.large,
-                            contentPadding = 14.dp,
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .background(item.tint.copy(alpha = 0.12f), FinanceTheme.shapes.medium),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = item.title,
-                                        tint = item.tint,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                                Text(
-                                    text = item.title,
-                                    style = FinanceTheme.typography.bodyMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp,
-                                    ),
-                                    color = FinanceTheme.colors.textPrimary,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = item.subtitle,
-                                    style = FinanceTheme.typography.caption.copy(fontSize = 11.sp),
-                                    color = FinanceTheme.colors.textMuted,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                    if (pair.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(56.dp))
+    LaunchedEffect(query, revision, period, customApplied) {
+        loading = true
+        data = null
+        error = null
+        if (period == FinancePeriod.CUSTOM && !customApplied) { loading = false; return@LaunchedEffect }
+        repository.fetchDashboard(query).onSuccess { data = it }.onFailure { error = it.message }
+        loading = false
     }
 
-    if (selectedReportFeature != null) {
-        Dialog(onDismissRequest = { selectedReportFeature = null }) {
-            Surface(
-                shape = FinanceTheme.shapes.xLarge,
-                color = FinanceTheme.colors.surfaceCard,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Text(
-                        text = selectedReportFeature ?: "Báo cáo",
-                        style = FinanceTheme.typography.titleLarge,
-                        color = FinanceTheme.colors.textPrimary,
-                    )
-                    Text(
-                        text = "Tính năng đang được phát triển",
-                        style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = FinanceTheme.colors.primary,
-                    )
-                    Text(
-                        text = "Báo cáo phân tích chuyên sâu sẽ được mở rộng dựa trên dữ liệu giao dịch thực tế của bạn trong các phiên bản cập nhật tới.",
-                        style = FinanceTheme.typography.bodyMedium,
-                        color = FinanceTheme.colors.textSecondary,
-                    )
-                    SecondaryButton(
-                        text = "Đóng",
-                        onClick = { selectedReportFeature = null },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+    Column(modifier.fillMaxSize().background(FinanceTheme.colors.background)
+        .verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Báo cáo tài chính", style = FinanceTheme.typography.headlineLarge)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FinancePeriod.values().forEach { value ->
+                FinanceChip(text = value.label, isSelected = period == value, onClick = {
+                    period = value
+                    inputError = null
+                    customApplied = false
+                    if (value != FinancePeriod.CUSTOM) { query = value.query(); revision++ }
+                })
+            }
+        }
+        if (period == FinancePeriod.CUSTOM) {
+            OutlinedTextField(from, { from = it; customApplied = false }, label = { Text("Từ ngày (dd/MM/yyyy)") }, singleLine = true)
+            OutlinedTextField(to, { to = it; customApplied = false }, label = { Text("Đến ngày (dd/MM/yyyy)") }, singleLine = true)
+            SecondaryButton(text = "Áp dụng", onClick = {
+                runCatching { period.query(from, to) }.onSuccess { query = it; inputError = null; customApplied = true; revision++ }
+                    .onFailure { inputError = "Ngày chưa hợp lệ hoặc ngày kết thúc trước ngày bắt đầu." }
+            })
+        }
+        inputError?.let { Text(it, color = FinanceTheme.colors.expense) }
+        when {
+            period == FinancePeriod.CUSTOM && data == null && !loading && error == null -> Text("Chọn khoảng ngày và bấm Áp dụng.")
+            loading -> LoadingState()
+            error != null -> ErrorState(message = error!!, onRetry = { revision++ })
+            else -> data?.let { dashboard ->
+                Text(dashboard.periodLabel, style = FinanceTheme.typography.bodyMedium)
+                if (dashboard.possibleDuplicateCount > 0) Text("Có giao dịch có thể trùng giữa các nguồn; tổng số cần đối soát.", color = FinanceTheme.colors.expense)
+                FinanceCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Tổng thu: ${dashboard.formattedIncome}", color = FinanceTheme.colors.income)
+                        Text("Tổng chi: ${dashboard.formattedExpense}", color = FinanceTheme.colors.expense)
+                        Text("Dòng tiền ròng: ${dashboard.formattedNetDiff}")
+                    }
+                }
+                if (dashboard.totalTransactionsCount == 0) EmptyState(title = "Chưa có giao dịch trong kỳ này.")
+                if (dashboard.hasReportBreakdowns) SpendingChart(daily = dashboard.daily)
+                else Text("Máy chủ chưa cung cấp báo cáo theo ngày, ngân hàng và nguồn. Cần cập nhật kết nối.", color = FinanceTheme.colors.textMuted)
+                FinanceCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SectionHeader(title = "Chi theo danh mục")
+                        if (dashboard.categories.isEmpty()) Text("Chưa có chi tiêu.")
+                        dashboard.categories.forEach { CategoryProgress(category = it) }
+                    }
+                }
+                MetricList("Thu theo danh mục", dashboard.incomeCategories)
+                if (dashboard.hasReportBreakdowns) {
+                    MetricList("Theo ngân hàng", dashboard.banks)
+                    MetricList("Thu theo nguồn", dashboard.sources)
                 }
             }
         }
+        Spacer(Modifier.height(56.dp))
     }
 }
 
 @Composable
-private fun ReportStatItem(
-    title: String,
-    value: String,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = title,
-            style = FinanceTheme.typography.caption.copy(
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-            ),
-            color = FinanceTheme.colors.textMuted,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = value,
-            style = FinanceTheme.typography.caption.copy(
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.3).sp,
-            ),
-            color = color,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
+private fun MetricList(title: String, rows: List<UiPeriodMetric>) {
+    FinanceCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionHeader(title = title)
+            if (rows.isEmpty()) Text("Chưa có dữ liệu trong kỳ này.")
+            rows.forEach { row ->
+                val label = when (row.name) {
+                    "BANK_NOTIFICATION" -> "Thông báo ngân hàng"
+                    "MONEYLOVER" -> "Nhập lịch sử"
+                    "MANUAL" -> "Ghi chép thủ công"
+                    else -> row.name
+                }
+                Text(label, style = FinanceTheme.typography.titleMedium)
+                Text("Thu ${FinanceFormatters.formatVnd(row.income)} · Chi ${FinanceFormatters.formatVnd(row.expense)}",
+                    style = FinanceTheme.typography.bodyMedium)
+            }
+        }
     }
 }

@@ -21,12 +21,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.components.FinanceCard
-import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
 @Composable
 fun AccountsScreen(
-    dashboardData: UiDashboard,
     onViewTransactions: () -> Unit,
     onViewInterest: () -> Unit,
     modifier: Modifier = Modifier,
@@ -55,20 +53,20 @@ fun AccountsScreen(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "Tài chính hiện tại",
+                    text = "Số dư tài khoản ngân hàng",
                     style = FinanceTheme.typography.bodyMedium,
                     color = FinanceTheme.colors.textSecondary,
                 )
                 Text(
-                    text = dashboardData.formattedBalance,
-                    style = FinanceTheme.typography.balance.copy(fontSize = 32.sp),
+                    text = "Chưa có dữ liệu số dư",
+                    style = FinanceTheme.typography.titleMedium,
                     color = FinanceTheme.colors.textPrimary,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Tổng hợp từ dữ liệu giao dịch đang có",
+                    text = "Dòng tiền thu chi được trình bày riêng tại Tổng quan.",
                     style = FinanceTheme.typography.caption,
                     color = FinanceTheme.colors.textMuted,
                 )
@@ -91,14 +89,14 @@ fun AccountsScreen(
                 BankSourceItem(
                     name = "Vietcombank",
                     syncStatus = "Đồng bộ tự động",
-                    balance = "Đang kết nối",
+                    balance = "Chưa có dữ liệu số dư",
                     badgeColor = Color(0xFFE8F5E9),
                     iconTint = Color(0xFF2E7D32),
                 )
                 HorizontalDivider(color = FinanceTheme.colors.borderGlass.copy(alpha = 0.6f))
                 BankSourceItem(
                     name = "VietinBank",
-                    syncStatus = "Đồng bộ tự động",
+                    syncStatus = "Nguồn thông báo",
                     balance = "Chưa có dữ liệu số dư",
                     badgeColor = Color(0xFFE3F2FD),
                     iconTint = Color(0xFF1565C0),
@@ -106,7 +104,7 @@ fun AccountsScreen(
                 HorizontalDivider(color = FinanceTheme.colors.borderGlass.copy(alpha = 0.6f))
                 BankSourceItem(
                     name = "BIDV",
-                    syncStatus = "Đồng bộ tự động",
+                    syncStatus = "Nguồn thông báo",
                     balance = "Chưa có dữ liệu số dư",
                     badgeColor = Color(0xFFEDE7F6),
                     iconTint = Color(0xFF4527A0),

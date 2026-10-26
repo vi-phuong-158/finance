@@ -61,7 +61,7 @@ fun BalanceCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Tài chính hiện tại",
+                    text = "Dòng tiền ròng trong kỳ",
                     style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                     color = Color.White.copy(alpha = 0.88f),
                 )
@@ -75,7 +75,7 @@ fun BalanceCard(
                 ) {
                     Icon(
                         imageVector = if (isAmountVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
-                        contentDescription = "Ẩn/hiện số dư",
+                        contentDescription = "Ẩn/hiện dòng tiền",
                         tint = Color.White,
                         modifier = Modifier.size(18.dp),
                     )
@@ -97,7 +97,7 @@ fun BalanceCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Tổng hợp từ dữ liệu giao dịch",
+                    text = "Tổng thu trừ tổng chi",
                     style = FinanceTheme.typography.caption,
                     color = Color.White.copy(alpha = 0.80f),
                     maxLines = 1,

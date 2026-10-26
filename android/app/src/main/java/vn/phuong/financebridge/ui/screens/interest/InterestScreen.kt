@@ -51,7 +51,7 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
                 val current = data!!
                 LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     item {
-                        Text("Theo dõi tiền lãi", style = FinanceTheme.typography.headlineLarge)
+                        Text("Tiền lãi & Công nợ", style = FinanceTheme.typography.headlineLarge)
                         Text("Ngày xem ${displayDate(current.asOf)}", style = FinanceTheme.typography.caption)
                     }
                     item {
@@ -87,7 +87,7 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
                         FinanceCard(Modifier.fillMaxWidth().clickable { expanded = if (expanded == loan.id) null else loan.id }) {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(loan.name, style = FinanceTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                                Text("${loan.id} · ${loan.status}", style = FinanceTheme.typography.caption)
+                                Text(loan.status, style = FinanceTheme.typography.caption)
                                 InterestMetric("Gốc còn lại", loan.principal)
                                 InterestMetric("Lãi đến hạn còn thu", loan.due)
                                 InterestMetric("Lãi kỳ hiện tại", loan.currentInterest)
@@ -95,11 +95,13 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
                                     color = FinanceTheme.colors.primary, style = FinanceTheme.typography.bodyMedium)
                                 if (expanded == loan.id) {
                                     HorizontalDivider()
-                                    Text("Các đợt giải ngân", style = FinanceTheme.typography.titleMedium)
-                                    loan.disbursements.forEach { entry -> InterestEntryRow(entry) }
-                                    Text("Lịch sử thu tiền", style = FinanceTheme.typography.titleMedium)
-                                    if (loan.payments.isEmpty()) Text("Chưa ghi nhận thu tiền.")
-                                    loan.payments.forEach { entry -> InterestEntryRow(entry) }
+                                    InterestMetric("Tổng đã giải ngân", loan.disbursed)
+                                    InterestMetric("Lãi đã chốt lũy kế", loan.accrued)
+                                    InterestMetric("Lãi đã thu", loan.paid)
+                                    loan.maturity?.let { Text("Đáo hạn: ${displayDate(it)}") }
+                                    Text("Dòng thời gian", style = FinanceTheme.typography.titleMedium)
+                                    (loan.disbursements + loan.payments).sortedByDescending { it.date }
+                                        .forEach { entry -> InterestEntryRow(entry) }
                                 }
                             }
                         }
@@ -110,12 +112,13 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
     }
 }
 
-private fun displayDate(value: String): String = value.split('-').reversed().joinToString("/")
+private fun displayDate(value: String): String = FinanceFormatters.formatIsoDate(value)
 
 @Composable
 private fun InterestEntryRow(entry: InterestEntry) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("${displayDate(entry.date)} · ${entry.label}", style = FinanceTheme.typography.bodyMedium)
+        entry.maturity?.let { Text("Đáo hạn ${displayDate(it)}", style = FinanceTheme.typography.caption) }
         AmountText(FinanceFormatters.formatVnd(entry.amount))
     }
 }
