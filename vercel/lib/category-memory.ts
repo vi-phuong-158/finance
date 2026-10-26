@@ -42,7 +42,8 @@ export function memoryLabel(text: string): string {
   return normalized.split(' ').length <= MAX_IDENTITY_TOKENS ? normalized : '';
 }
 
-const TRANSFER = /(?:^|[^A-Z0-9])CT TU (?:\*+|\d+) (.+?) TOI (?:\*+|\d+) (.+)$/;
+// Account token: masked ***, digits, or a virtual account mixing letters and digits (it must contain a digit).
+const TRANSFER = /(?:^|[^A-Z0-9])CT TU (?:\*+|[A-Z0-9*]*\d[A-Z0-9*]*) (.+?) TOI (?:\*+|[A-Z0-9*]*\d[A-Z0-9*]*) (.+)$/;
 const TRANSFER_WORDS = / (?:CHUYEN TIEN|CHUYEN KHOAN|CK|IBFT|NAPAS|CT TU|CT DEN|CT DI|TRANSFER|TU .+ TOI) /;
 // Receiving-bank names/codes only (identifiers, not merchant rules). " TAI <token>" is stripped ONLY for these:
 // "Tài" is a common given name ("NGUYEN VAN TAI AN"), so an unknown token after TAI stays part of the name.

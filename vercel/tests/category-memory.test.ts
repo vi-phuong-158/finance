@@ -438,3 +438,35 @@ test('" tai <bank>" is stripped only for known banks: given name Tài never trun
   // Unknown receiving bank: kept verbatim (a stable, more specific key), never cut into a shorter shared name.
   assert.equal(key('LE VAN B', ' tai XYZBANK'), 'COUNTERPARTY:LE VAN B TAI XYZBANK');
 });
+
+// Structure of two owner-supplied VCB notifications (26/10/2026). Every name, account, virtual
+// account, reference and amount is replaced; only the layout is kept.
+const ownerOut = (ref: string, virtualAccount: string, receiver: string) =>
+  `Số dư TK VCB 9999999999 -25,000 VND lúc 01-03-2026 18:50:44. Số dư 147,322 VND. Ref MBVCB.${ref}.1111AAAAAA1A1A1A.${OWNER} chuyen tien.CT tu 9999999999 ${OWNER} toi ${virtualAccount} ${receiver} tai TECHCOMBANK`;
+const ownerIn = (sender: string, ref: string) =>
+  `Số dư TK VCB 9999999999 +3,000,000 VND lúc 01-03-2026 09:56:37. Số dư 3,172,322 VND. Ref ${sender} Chuyen tien#SP#${ref}abc1111111.1111.1111.111111`;
+
+test('owner-shaped VCB samples: a virtual (letters+digits) receiver account still yields the receiver; the bare memo yields nothing', () => {
+  // No masking assertion here: digit runs glued to letters are not masked by maskSensitiveIdentifiers today
+  // (pre-existing gap, tracked separately). The identity itself never contains digits.
+  const vcbIdentity = (text: string) => {
+    const p = parseVcb(text)!;
+    const identity = resolveIdentity({ source: 'BANK_NOTIFICATION', bank: p.bank, type: p.type, counterparty: p.counterparty, description: p.description }, KEY);
+    assert.equal(/\d/.test(identity?.key ?? ''), false);
+    return identity;
+  };
+  const first = vcbIdentity(ownerOut('11111111111', 'XY00Z00000000000001', 'TRAN THI B'));
+  assert.deepEqual([first?.type, first?.key], ['COUNTERPARTY', 'COUNTERPARTY:TRAN THI B']);
+  assert.equal(vcbIdentity(ownerOut('22222222222', 'XY00Z00000000000002', 'TRAN THI B'))?.key, first?.key);
+  assert.equal(vcbIdentity(ownerOut('11111111111', 'XY00Z00000000000001', 'LE VAN C'))?.key, 'COUNTERPARTY:LE VAN C');
+  // A letters-only token after tu/toi is a name, not an account: still uncertain.
+  assert.equal(vcbIdentity(ownerOut('11111111111', 'XYZ', 'TRAN THI B')), null);
+  const incoming = ['000000000000000000012026', '000000000000000000022026'].map((ref) => ownerIn('LE THI D', ref));
+  for (const text of incoming) assert.equal(vcbIdentity(text), null);
+  const ledger = new Ledger();
+  for (const text of incoming) {
+    const p = parseVcb(text)!;
+    for (let i = 0; i < 2; i++) ledger.confirm(ledger.add({ type: 'THU', counterparty: p.counterparty, description: p.description }), 'Tiền chuyển đến', 'THU');
+  }
+  assert.deepEqual(rules(ledger), []);
+});
