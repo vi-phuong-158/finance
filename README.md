@@ -5,7 +5,7 @@ Gói mã nguồn gồm:
 2. **`android/`**: Ứng dụng single-module dùng Kotlin, Jetpack Compose, `NotificationListenerService`, `SensitiveFilter`, WorkManager, Android Keystore và SQLite cục bộ.
 3. **`SPEC_V3_1.md`**: Bản đặc tả kỹ thuật chốt thi công V3.1.
 
-Mã nguồn chưa được nghiệm thu trên điện thoại hay Google Sheets thật. MVP ưu tiên VCB; BIDV/VietinBank cần mẫu đã che dữ liệu để viết parser. Tiến độ triển khai và các gate còn chờ được ghi tại [docs/DE_XUAT_TRIEN_KHAI.md](docs/DE_XUAT_TRIEN_KHAI.md).
+Nhánh hoàn thiện v1 có parser VCB/BIDV/VietinBank theo envelope được xác nhận, ghi tay qua outbox, lịch sử phân trang và báo cáo từ dữ liệu thật. Chưa nghiệm thu trọn luồng v1 trên điện thoại. Xem [audit/kế hoạch v1](docs/finance-v1/IMPLEMENTATION_PLAN.md) và [schema/vận hành](docs/finance-v1/SCHEMA_AND_OPERATIONS.md); CI hoặc build debug không thay thế release gate.
 
 Hướng dẫn cài đặt/pilot theo 12 bước: [VCB Production E2E](docs/VCB_PRODUCTION_E2E.md). Kiến trúc runtime secret: [docs/RUNTIME_WEBHOOK_CREDENTIAL.md](docs/RUNTIME_WEBHOOK_CREDENTIAL.md). Ghi kết quả điện thoại vào [checklist riêng](docs/VCB_DEVICE_CHECKLIST.md). Không cần sửa source để đổi cấu hình triển khai.
 
@@ -58,7 +58,7 @@ Tạo một bảng tính riêng cho môi trường của bạn và cấu hình `
 
 Backend che identifier có từ 8 chữ số, liền nhau hoặc ngăn bằng space/NBSP hoặc dấu `-`, `.`, `,`, `/`, `_`, trước khi ghi `Raw_Capture.raw_text`, `Transactions.description` và `counterparty`. Các giá trị có đơn vị tiền, token ngày/giờ và cột amount/balance/event_id được giữ nguyên. Đây là quy tắc xác định cho format MVP, không phải bộ nhận diện mọi dữ liệu cá nhân.
 
-Dedup đọc toàn bộ cột ID của cả hai tab; không còn cửa sổ 1.000 dòng. Đọc và append vẫn là hai thao tác: request đồng thời có thể ghi trùng. Mutex Android tuần tự hóa upload trong một tiến trình, không thay thế khóa nguyên tử phía Sheets.
+Dedup đọc toàn bộ cột ID của cả hai tab để tương thích lịch sử. Ghi mới dùng một batch nguyên tử gồm named-range marker duy nhất theo eventId và appendCells literal. Sau timeout/chạy đồng thời, chỉ ack khi đọc lại thấy dòng tài chính. Không xóa marker theo TTL. Xem giới hạn và bằng chứng native trong tài liệu vận hành v1; chưa coi thử nghiệm connector là E2E điện thoại/Vercel.
 
 ## Kiểm tra tự động
 
@@ -68,3 +68,11 @@ Workflow `.github/workflows/build-pilot-apk.yml` build public-safe APK và uploa
 
 ## Theo dõi tiền lãi
 Tài khoản → Theo dõi tiền lãi dùng kỳ tháng 25–25 và sổ Google Sheets hiện tại. Cấu hình, quy tắc và giới hạn nghiệm thu: [INTEREST_TRACKING](docs/INTEREST_TRACKING.md).
+
+## Hoàn thiện v1 đang chờ nghiệm thu
+
+- Dashboard không dùng preview/sample khi thiếu cấu hình, lỗi hoặc nguồn rỗng; net được ghi là dòng tiền ròng, không phải số dư ngân hàng.
+- Báo cáo chọn hôm nay/7 ngày/tháng này/tháng trước/năm nay/tùy chọn, dùng cùng exclusion policy với API; có chiều ngày/ngân hàng/nguồn.
+- Lịch sử dùng GET /api/transactions phân trang riêng, có tìm kiếm/lọc/chi tiết; không giới hạn ở 5–10 dòng dashboard.
+- Ghi Thu/Chi lưu trên máy trước, đồng bộ POST /api/manual-transaction qua WorkManager. Để ghi lên backend phải chạy migration Transactions V2 đã được duyệt và kiểm tra quyền môi trường. Chưa migrate thì giữ blocked, không giả thành công.
+- Module công nợ hiện giữ API đọc 25–25; không đổi sổ nguồn hoặc tạo lịch sử giả. Chức năng mutation khoản vay/sửa giao dịch còn gate riêng được ghi trong kế hoạch.
