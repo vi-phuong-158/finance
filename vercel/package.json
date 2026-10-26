@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "sheets:bootstrap": "node --env-file=.env.local --import tsx scripts/bootstrap-sheets.ts",
     "check:deployment": "node --env-file=.env.local --import tsx scripts/check-deployment.ts",
-    "moneylover:import": "node --env-file-if-exists=.env.local --import tsx scripts/import-moneylover.ts"
+    "moneylover:import": "node --env-file-if-exists=.env.local --import tsx scripts/import-moneylover.ts",
+    "transactions:migrate": "node --env-file-if-exists=.env.local --import tsx scripts/migrate-transactions.ts"
   },
   "dependencies": {
     "googleapis": "^144.0.0"

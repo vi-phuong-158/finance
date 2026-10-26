@@ -2,12 +2,13 @@ import type { GoogleConfiguration } from './configuration.js';
 import type { FinanceReadPort } from './unified-transactions.js';
 
 export function financeReadRanges(tabs: { title: string; rows: number; columns: number; type: string }[]): string[] {
-  return [{ title: 'Transactions', width: 9, last: 'J' }, { title: 'MoneyLover_History', width: 15, last: 'P' }].map((target) => {
+  return [{ title: 'Transactions', width: 9, last: 'L' }, { title: 'MoneyLover_History', width: 15, last: 'P' }].map((target) => {
     const tab = tabs.find((t) => t.title === target.title);
     if (!tab || tab.type !== 'GRID' || !Number.isSafeInteger(tab.rows) || tab.rows < 1 || tab.columns < target.width) throw new Error('FINANCE_SCHEMA_MISMATCH');
     // ponytail: bound the grid rather than silently omit rows beyond a fixed read window.
     if (tab.rows > 50001) throw new Error('FINANCE_SOURCE_LIMIT_EXCEEDED');
-    const last = tab.columns > target.width ? target.last : target.title === 'Transactions' ? 'I' : 'O';
+    const last = target.title === 'Transactions' ? (tab.columns >= 12 ? 'L' : tab.columns === 11 ? 'K' : tab.columns === 10 ? 'J' : 'I')
+      : tab.columns > target.width ? target.last : 'O';
     return `'${target.title}'!A1:${last}${tab.rows}`;
   });
 }

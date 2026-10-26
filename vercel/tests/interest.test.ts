@@ -63,6 +63,35 @@ test('boundary principal payment reduces the new period; early interest is an ad
   assert.equal(d.interestDue, 0); assert.equal(d.currentRemaining, 0);
   assert.equal(d.collectedThisPeriod, 0);
 });
+test('anonymized multiple-disbursement golden flow uses 25–25 principal and preserves distinct identical receipts', () => {
+  // Synthetic amounts, dates, rate and borrower; no personal spreadsheet records in Git.
+  const data: InterestData = { loans: [{ id: 'GOLDEN', name: 'Synthetic borrower', principal: 90000000 }],
+    disbursements: [
+      { id: 'A', loanId: 'GOLDEN', principal: 20000000, annualRate: 0.12, date: '2024-01-08', maturity: null },
+      { id: 'B', loanId: 'GOLDEN', principal: 70000000, annualRate: 0.12, date: '2024-02-25', maturity: null },
+    ], payments: [
+      { row: 2, loanId: 'GOLDEN', type: 'Thu gốc', amount: 6000000, date: '2024-03-29' },
+      { row: 3, loanId: 'GOLDEN', type: 'Thu lãi', amount: 300000, date: '2024-03-29' },
+      { row: 4, loanId: 'GOLDEN', type: 'Thu lãi', amount: 300000, date: '2024-03-29' },
+    ] };
+  const march = buildInterest(data, '2024-03-29').loans[0];
+  assert.equal(march.outstandingPrincipal, 84000000);
+  assert.equal(march.currentInterest, 900000);
+  assert.equal(march.paidInterest, 600000);
+  const april = buildInterest(data, '2024-04-25').loans[0];
+  assert.equal(april.currentInterest, 840000);
+  assert.equal(april.accruedInterest, 2000000);
+  assert.equal(april.interestDue, 1400000);
+  assert.equal(april.payments.length, 3);
+});
+test('unsafe cumulative interest receipts fail closed instead of silently losing integer precision', () => {
+  const data = fixture();
+  data.payments = [
+    { row: 2, loanId: 'LN-A', type: 'Thu lãi', amount: Number.MAX_SAFE_INTEGER, date: '2024-03-29' },
+    { row: 3, loanId: 'LN-A', type: 'Thu lãi', amount: 1, date: '2024-03-29' },
+  ];
+  assert.throws(() => buildInterest(data, '2024-04-25'), /INVALID_INTEREST_ROW/);
+});
 test('maturities keep separate cutoff dates and no partial final period or interest capitalization', () => {
   const data = fixture();
   const old = buildInterest(data, '2025-03-25');

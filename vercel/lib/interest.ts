@@ -26,7 +26,19 @@ export function firstPeriod(date: string): string {
   const start = periodStart(date);
   return date === start ? start : nextPeriod(start);
 }
-const round = (value: number) => Math.round(value + 1e-8);
+const round = (value: number) => {
+  const result = Math.round(value + 1e-8);
+  if (!Number.isSafeInteger(result)) throw new Error('INVALID_INTEREST_ROW');
+  return result;
+};
+function moneySum(values: number[]): number {
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || !Number.isSafeInteger(total + value)) throw new Error('INVALID_INTEREST_ROW');
+    total += value;
+  }
+  return total;
+}
 
 export function buildInterest(data: InterestData, asOf: string) {
   dateOnly(asOf);
@@ -34,17 +46,17 @@ export function buildInterest(data: InterestData, asOf: string) {
   const loans = data.loans.map((loan) => {
     const tranches = data.disbursements.filter((d) => d.loanId === loan.id)
       .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-    if (!tranches.length || tranches.reduce((sum, t) => sum + t.principal, 0) !== loan.principal) throw new Error('INTEREST_PRINCIPAL_MISMATCH');
+    if (!tranches.length || moneySum(tranches.map((t) => t.principal)) !== loan.principal) throw new Error('INTEREST_PRINCIPAL_MISMATCH');
     const payments = data.payments.filter((p) => p.loanId === loan.id && p.date <= asOf);
     const principalPayments = payments.filter((p) => p.type === 'Thu gốc');
     for (const p of principalPayments) {
-      const received = principalPayments.filter((q) => q.date <= p.date).reduce((s, q) => s + q.amount, 0);
-      const disbursed = tranches.filter((t) => t.date <= p.date).reduce((s, t) => s + t.principal, 0);
+      const received = moneySum(principalPayments.filter((q) => q.date <= p.date).map((q) => q.amount));
+      const disbursed = moneySum(tranches.filter((t) => t.date <= p.date).map((t) => t.principal));
       if (received > disbursed) throw new Error('INTEREST_OVERPAYMENT');
     }
     const amountForPeriod = (from: string) => {
       const to = nextPeriod(from);
-      const repaid = principalPayments.filter((p) => p.date <= from).reduce((s, p) => s + p.amount, 0);
+      const repaid = moneySum(principalPayments.filter((p) => p.date <= from).map((p) => p.amount));
       let previous = 0;
       return tranches.reduce((sum, tranche) => {
         // FIFO allocates repayments to the oldest disbursement, preserving each maturity.
@@ -63,9 +75,9 @@ export function buildInterest(data: InterestData, asOf: string) {
       accrued += amountForPeriod(from);
     }
     const accruedInterest = round(accrued);
-    const paidInterest = payments.filter((p) => p.type === 'Thu lãi').reduce((s, p) => s + p.amount, 0);
-    const repaidPrincipal = principalPayments.reduce((s, p) => s + p.amount, 0);
-    const outstandingPrincipal = tranches.filter((t) => t.date <= asOf).reduce((s, t) => s + t.principal, 0) - repaidPrincipal;
+    const paidInterest = moneySum(payments.filter((p) => p.type === 'Thu lãi').map((p) => p.amount));
+    const repaidPrincipal = moneySum(principalPayments.map((p) => p.amount));
+    const outstandingPrincipal = moneySum(tranches.filter((t) => t.date <= asOf).map((t) => t.principal)) - repaidPrincipal;
     const currentInterest = round(amountForPeriod(start));
     const advanceInterest = Math.max(0, paidInterest - accruedInterest);
     const maturities = tranches.map((t) => t.maturity).filter((d): d is string => d !== null);
@@ -75,10 +87,10 @@ export function buildInterest(data: InterestData, asOf: string) {
     return { ...loan, outstandingPrincipal, repaidPrincipal, accruedInterest, paidInterest,
       interestDue: Math.max(0, accruedInterest - paidInterest), advanceInterest, currentInterest,
       currentRemaining: Math.max(0, currentInterest - advanceInterest),
-      collectedThisPeriod: payments.filter((p) => p.type === 'Thu lãi' && p.date >= start).reduce((s, p) => s + p.amount, 0),
+      collectedThisPeriod: moneySum(payments.filter((p) => p.type === 'Thu lãi' && p.date >= start).map((p) => p.amount)),
       completedPeriods, maturity, status, disbursements: tranches, payments };
   });
-  const sum = (key: 'outstandingPrincipal' | 'accruedInterest' | 'paidInterest' | 'interestDue' | 'currentInterest' | 'advanceInterest' | 'collectedThisPeriod' | 'currentRemaining') => loans.reduce((s, l) => s + l[key], 0);
+  const sum = (key: 'outstandingPrincipal' | 'accruedInterest' | 'paidInterest' | 'interestDue' | 'currentInterest' | 'advanceInterest' | 'collectedThisPeriod' | 'currentRemaining') => moneySum(loans.map((l) => l[key]));
   return { rule: INTEREST_RULE, asOf, period: { from: start, to: end }, loans,
     totals: { outstandingPrincipal: sum('outstandingPrincipal'), accruedInterest: sum('accruedInterest'),
       paidInterest: sum('paidInterest'), interestDue: sum('interestDue'), currentInterest: sum('currentInterest'),

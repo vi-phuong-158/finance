@@ -7,7 +7,7 @@ import { parseVcb } from '../parsers/vcb.js';
 import { parseVietinbank } from '../parsers/vietinbank.js';
 import { timingSafeEqual } from 'node:crypto';
 import { configurationIsValid, readGoogleConfiguration } from './configuration.js';
-import { hasExpectedHeaders, TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
+import { hasExpectedHeaders, hasTransactionHeaders, TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
 export { TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
 
 export type Bank = 'VCB' | 'VIETINBANK' | 'BIDV';
@@ -20,8 +20,8 @@ type Environment = Record<string, string | undefined>;
 type SheetsPort = {
   readEventIds: () => Promise<{ transactionIds: unknown[]; rawIds: unknown[] }>;
   readHeaders: () => Promise<{ transaction: unknown[]; raw: unknown[] }>;
-  appendTransaction: (row: unknown[]) => Promise<void>;
-  appendRaw: (row: unknown[]) => Promise<void>;
+  appendTransaction: (row: unknown[]) => Promise<void | 'APPENDED' | 'DUPLICATE'>;
+  appendRaw: (row: unknown[]) => Promise<void | 'APPENDED' | 'DUPLICATE'>;
 };
 type SheetsPortFactory = (config: { spreadsheetId: string; clientEmail: string; privateKey: string }) => Promise<SheetsPort>;
 export type TransactionResult = {
@@ -147,7 +147,7 @@ async function validateAndProcessTransactionInternal(
 
   try {
     const headers = await sheets.readHeaders();
-    if (!hasExpectedHeaders(headers.transaction, TRANSACTION_HEADERS) || !hasExpectedHeaders(headers.raw, RAW_CAPTURE_HEADERS)) {
+    if (!hasTransactionHeaders(headers.transaction) || !hasExpectedHeaders(headers.raw, RAW_CAPTURE_HEADERS)) {
       return { httpStatus: 503, body: { error: 'SHEET_SCHEMA_MISMATCH' } };
     }
 
@@ -165,7 +165,7 @@ async function validateAndProcessTransactionInternal(
 
     if (parsed) {
       const category = matchCategory(`${parsed.counterparty} ${parsed.description}`, parsed.type);
-      await sheets.appendTransaction([
+      const saved = await sheets.appendTransaction([
         parsed.time,
         bank,
         parsed.type,
@@ -177,12 +177,12 @@ async function validateAndProcessTransactionInternal(
         eventId,
       ]);
 
-      return { httpStatus: 200, body: { status: 'SAVED_TRANSACTION', eventId } };
+      return { httpStatus: 200, body: { status: saved === 'DUPLICATE' ? 'DUPLICATE_IGNORED' : 'SAVED_TRANSACTION', eventId } };
     }
 
     const safeText = maskSensitiveIdentifiers(normalizedText);
-    await sheets.appendRaw([formatReceivedTime(postedAt), bank, safeText, eventId]);
-    return { httpStatus: 200, body: { status: 'SAVED_RAW_CAPTURE', eventId } };
+    const saved = await sheets.appendRaw([formatReceivedTime(postedAt), bank, safeText, eventId]);
+    return { httpStatus: 200, body: { status: saved === 'DUPLICATE' ? 'DUPLICATE_IGNORED' : 'SAVED_RAW_CAPTURE', eventId } };
   } catch (error) {
     const code = (error as { response?: { status?: number } })?.response?.status;
     if (code === 401 || code === 403) return { httpStatus: 503, body: { error: 'SHEETS_PERMISSION_DENIED' } };

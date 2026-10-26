@@ -14,3 +14,14 @@ test('bootstrap and deployment-check entrypoints fail closed without leaking inv
     assert.equal(result.stderr.includes('sensitive-invalid-marker'), false);
   }
 });
+
+test('transaction migration CLI rejects invalid configuration without displaying secrets or writing data', () => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/migrate-transactions.ts'], {
+    cwd: new URL('..', import.meta.url), encoding: 'utf8',
+    env: { ...process.env, SPREADSHEET_ID: '', GOOGLE_CLIENT_EMAIL: '', GOOGLE_PRIVATE_KEY: 'private-invalid-marker' },
+  });
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.ok(result.stderr.includes('MIGRATION_BLOCKED'));
+  assert.equal(result.stderr.includes('private-invalid-marker'), false);
+});
