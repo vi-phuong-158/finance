@@ -47,6 +47,7 @@ export async function writeManual(request: ManualRequest, env: Environment, make
       return JSON.stringify(existing[0]) === JSON.stringify(row) ? result(200, { status: 'DUPLICATE_IGNORED' })
         : result(409, { error: 'IDEMPOTENCY_CONFLICT' });
     }
+    if (rows.length >= 50001) return result(503, { error: 'LEDGER_SOURCE_FULL' });
     const saved = await port.append(row);
     return result(200, { status: saved === 'DUPLICATE' ? 'DUPLICATE_IGNORED' : 'SAVED_TRANSACTION' });
   } catch { return result(503, { error: 'UPSTREAM_UNAVAILABLE' }); }

@@ -25,11 +25,18 @@ export async function makeGoogleFinanceReadPort(config: GoogleConfiguration): Pr
     const ranges = financeReadRanges((metadata.data.sheets ?? []).map(({ properties: p }) => ({
       title: p?.title ?? '', rows: p?.gridProperties?.rowCount ?? 0, columns: p?.gridProperties?.columnCount ?? 0, type: p?.sheetType ?? '',
     })));
+    const editSheet = metadata.data.sheets?.find((s) => s.properties?.title === 'Transaction_Edits')?.properties;
+    if (editSheet) {
+      if (editSheet.sheetType !== 'GRID' || (editSheet.gridProperties?.columnCount ?? 0) < 8 || !editSheet.gridProperties?.rowCount
+        || editSheet.gridProperties.rowCount > 50001) throw new Error('FINANCE_SCHEMA_MISMATCH');
+      const last = editSheet.gridProperties.columnCount === 8 ? 'H' : 'I';
+      ranges.push(`'Transaction_Edits'!A1:${last}${editSheet.gridProperties.rowCount}`);
+    }
     const response = await sheets.spreadsheets.values.batchGet({ spreadsheetId: config.spreadsheetId,
       ranges, valueRenderOption: 'UNFORMATTED_VALUE' });
-    const [bank, history] = (response.data.valueRanges ?? []).map((range) => range.values ?? []);
+    const [bank, history, edits] = (response.data.valueRanges ?? []).map((range) => range.values ?? []);
     if (!bank || !history) throw new Error('FINANCE_SCHEMA_MISMATCH');
     if (bank.length > 50001 || history.length > 50001) throw new Error('FINANCE_SOURCE_LIMIT_EXCEEDED');
-    return { bank, history };
+    return { bank, history, ...(editSheet ? { edits } : {}) };
   } };
 }

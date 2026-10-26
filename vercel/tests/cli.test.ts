@@ -25,3 +25,14 @@ test('transaction migration CLI rejects invalid configuration without displaying
   assert.ok(result.stderr.includes('MIGRATION_BLOCKED'));
   assert.equal(result.stderr.includes('private-invalid-marker'), false);
 });
+
+test('loan import and audit preparation CLIs are read-only or fail closed before configuration/network', () => {
+  for (const [script, args] of [['import-loans.ts', ['--apply']], ['prepare-finance-audit.ts', []]] as [string, string[]][]) {
+    const result = spawnSync(process.execPath, ['--import', 'tsx', `scripts/${script}`, ...args], {
+      cwd: new URL('..', import.meta.url), encoding: 'utf8', env: { ...process.env, GOOGLE_PRIVATE_KEY: 'private-invalid-marker' },
+    });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr.includes('private-invalid-marker'), false);
+  }
+});

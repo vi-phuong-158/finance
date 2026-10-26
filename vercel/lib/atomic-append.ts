@@ -5,6 +5,7 @@
 export function atomicAppendRequests(sheetId: number, eventId: string, row: unknown[]) {
   if (!Number.isSafeInteger(sheetId) || sheetId < 0 || !/^[a-f0-9]{64}$/.test(eventId)) throw new Error('INVALID_APPEND');
   const values = row.map((value) => {
+    if (typeof value === 'boolean') return { userEnteredValue: { boolValue: value } };
     if (typeof value === 'number' && Number.isFinite(value)) return { userEnteredValue: { numberValue: value } };
     if (typeof value === 'string') return { userEnteredValue: { stringValue: value } };
     throw new Error('INVALID_APPEND');

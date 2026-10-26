@@ -4,6 +4,7 @@ import type { Environment, GoogleConfiguration } from './configuration.js';
 import type { ReadRequest, ReadResponse } from './finance-read-service.js';
 import { buildInterest, dateOnly, parseInterestSnapshot } from './interest.js';
 import type { InterestSnapshot } from './interest.js';
+import { maskSensitiveIdentifiers } from '../sensitive-identifiers.js';
 
 export type InterestReadPort = { readInterest(): Promise<InterestSnapshot> };
 export async function readInterest(request: ReadRequest, env: Environment,
@@ -35,7 +36,8 @@ export async function readInterest(request: ReadRequest, env: Environment,
         [15, loan.collectedThisPeriod], [16, loan.advanceInterest], [17, loan.currentRemaining]];
       if (fields.some(([column, value]) => typeof row[column] !== 'number' || row[column] !== value)) throw new Error('INTEREST_RECONCILIATION_REQUIRED');
     }
-    return { httpStatus: 200, body: body as unknown as Record<string, unknown> };
+    return { httpStatus: 200, body: { ...body, writesEnabled: env.LOAN_WRITES_ENABLED === '1',
+      loans: body.loans.map((loan) => ({ ...loan, note: maskSensitiveIdentifiers(String(snapshot.loans.find((r) => r[0] === loan.id)?.[14] ?? '')) })) } as unknown as Record<string, unknown> };
   } catch (error) {
     const code = error instanceof Error ? error.message : '';
     const known = ['INTEREST_SCHEMA_MISMATCH', 'INTEREST_SOURCE_LIMIT_EXCEEDED', 'INTEREST_RULE_MISMATCH',

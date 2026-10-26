@@ -5,6 +5,7 @@ import { fromFinanceSnapshot } from './unified-transactions.js';
 import type { FinanceReadPort } from './unified-transactions.js';
 import { filterTransactions, paginateTransactions, parseFinanceQuery } from './finance-query.js';
 import { buildDashboard } from './dashboard-service.js';
+import { CATEGORY_REGISTRY } from './categories.js';
 
 export type ReadRequest = { method?: string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, unknown> };
 export async function readFinance(request: ReadRequest, env: Environment,
@@ -19,9 +20,12 @@ export async function readFinance(request: ReadRequest, env: Environment,
   try {
     const query = parseFinanceQuery(request.query ?? {}, endpoint === 'dashboard', now);
     const port = await makePort(readGoogleConfiguration(env)!);
-    const rows = filterTransactions(fromFinanceSnapshot(await port.readFinance()), query);
+    const snapshot = await port.readFinance();
+    const rows = filterTransactions(fromFinanceSnapshot(snapshot), query);
     return { httpStatus: 200, body: endpoint === 'dashboard' ? buildDashboard(rows, query, now)
-      : { ...paginateTransactions(rows, query, env.WEBHOOK_SECRET!), lastUpdatedAt: now.toISOString() } as Record<string, unknown> };
+      : { ...paginateTransactions(rows, query, env.WEBHOOK_SECRET!), lastUpdatedAt: now.toISOString(),
+        editingEnabled: env.TRANSACTION_EDITS_ENABLED === '1' && !!snapshot.edits,
+        categories: CATEGORY_REGISTRY.filter((c) => c.active).map((c) => ({ name: c.name, type: c.type })) } as Record<string, unknown> };
   } catch (error) {
     const code = error instanceof Error ? error.message : '';
     if (['INVALID_QUERY', 'INVALID_CURSOR'].includes(code)) return fail(400, code);
