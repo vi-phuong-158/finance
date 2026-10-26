@@ -4,10 +4,10 @@
 
 | Kiểm tra | Kết quả | Phạm vi |
 |---|---|---|
-| Backend `npm test` | 107/107, 0 fail/skip | parser/pipeline, manual/idempotency, migration, reports, monthly interest, auth/masking |
+| Backend `npm test` | 119/119, 0 fail/skip | parser/pipeline, manual/loan/edit idempotency, audit/migration/import, reports, monthly interest, auth/masking/locale |
 | `npm run typecheck` | exit 0 | TypeScript backend/scripts/tests |
 | Android `assembleDebug` | build thành công | Debug; không build release |
-| Android `testDebugUnitTest` | 41/41, 0 fail/error/skip | JVM; không có SQLite/WorkManager thật |
+| Android `testDebugUnitTest` | 46/46, 0 fail/error/skip | JVM; không có SQLite/WorkManager thật |
 | Webhook policy | 7/7 | URL/configuration policy, validateReleaseWebhookConfig; không tương đương build release |
 | Source scan | 0 match | Added source: PEM private-key header và literal webhook secret; không phải full-history/log security audit |
 | APK / BuildConfig | Không có symbol WEBHOOK_SECRET | Không nhúng build-time secret; secret nhập runtime qua Keystore |
@@ -24,7 +24,15 @@
 - Thiết bị: `adb devices` không có máy kết nối. Chưa kiểm navigation/form/SQLite/Worker, restart/reboot, offline/retry hoặc screenshot 360/412dp trên Android thật.
 - Chưa chạy migration `--apply`, chưa backup/reconcile production, chưa ghi transaction test lên sổ thật, chưa deploy production.
 - CI/Preview: xem checks của đúng HEAD PR, không dùng run của PR #6 cho code mới. Build READY chỉ là deploy state, chưa phải online acceptance.
-- Loan mutation và transaction correction chưa có; không báo hoàn thành các phase đó. Loan import/cutover/audit migration còn chờ triển khai và đối soát.
+- Loan mutation và transaction correction đã có code/test, mặc định tắt. Chưa bật/apply trên nguồn thật. Audit migration/backup/rollback đã có code và test; không coi đó là backup hay cutover production đã hoàn tất.
 - Chưa có ba luồng full E2E v1 (notification, ghi tay, loan event). Chưa đóng security review/logs/quota dài hạn hoặc signing gate.
 
 **Quyết định:** chưa phát hành APK v1.0. Giữ Draft PR, không merge thay chủ dự án.
+
+## Bổ sung sau xác nhận quyền mã nguồn/test
+
+- API loan-event và transaction-edit có unit/integration giả lập cho toàn luồng create→đợt giải ngân→thu gốc/lãi→metadata, edit category/note/type/excluded, audit/idempotency/revision/cờ/auth. Queue nâng schema 1→2 giữ payload cũ; form validation Kotlin được test.
+- Audit preparation dry-run/backup/readback/empty-only rollback và loan canonical mapping/provenance/re-run đều có test. Importer không ghi Sheets.
+- Bảng Google Sheets tổng hợp riêng đã được chủ dự án cho phép ghi đích cụ thể. Năm loại loan command tạo source/audit; hai yêu cầu thu gốc từ cùng revision cho đúng một batch thành công. Khớp 18/18 chỉ số tiền cho hai khoản. Edit audit thay read/report, giữ nguyên dòng nguồn.
+- Test native phát hiện comma/semicolon theo locale. Đã sửa adapter quote-aware, test hồi quy và xác minh native cả vi_VN/en_US; locale khác chặn trước khi ghi. Notes bắt đầu '=' vẫn là literal, không phải công thức.
+- Chưa ghi sổ nguồn thật, chưa bật các cờ production, chưa có máy Android kết nối. Kết quả native qua connector không thay cho full app→Vercel→Sheets E2E.

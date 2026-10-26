@@ -59,3 +59,43 @@ Kiểm thử native 26/10/2026 trên **bảng tổng hợp riêng**: gửi 4 bat
 Dashboard API thêm `dailySummary`, `bankSummary`, `sourceSummary`; mọi chiều dùng cùng eligible totals, loại chuyển nội bộ và excluded history. Android không dùng mẫu khi lỗi hoặc rỗng. Các chu kỳ hôm nay/7 ngày/tháng này/tháng trước/năm nay/tùy chọn gửi `from,to` thật. Net được ghi rõ là dòng tiền ròng. Accounts ghi chưa có dữ liệu số dư.
 
 Ngân hàng hiện parse envelope VCB và hai envelope BIDV/VietinBank được chủ dự án cung cấp ngày 26/10. Fixture đổi toàn bộ thông tin cá nhân, tham chiếu, tiền và thời điểm. Trường không chắc như counterparty từ nội dung chuyển khoản để trống. Envelope lạ vẫn chuyển Raw_Capture đã che dữ liệu; không đoán và không backfill nguồn thật tự động.
+
+## Ghi khoản vay và sửa giao dịch có audit
+
+Hai capability mặc định tắt: `LOAN_WRITES_ENABLED=0`, `TRANSACTION_EDITS_ENABLED=0`. Quyền được giao ở giai đoạn này là mã nguồn/test/Draft PR; chưa bật các cờ ở production.
+
+- `POST /api/loan-event`: CREATE_LOAN, DISBURSEMENT, PRINCIPAL_PAYMENT, INTEREST_PAYMENT, UPDATE_INFO. UUID v4 giữ nguyên qua retry, auth hiện hữu, tiền/ngày/rate được validate. Không nhận giao dịch tương lai. UPDATE_INFO chỉ sửa tên/ghi chú; không sửa lãi suất hoặc lịch sử tài chính cũ.
+- Loan source giữ `Khoản vay`, `Đợt giải ngân`, `Giao dịch`, `Cấu hình`; không tạo sổ tài chính song song. Writer yêu cầu hai tab Khoản vay/Đợt giải ngân có 300 dòng, cùng giới hạn template đang dùng. Thu gốc kiểm toàn bộ chronology, từ chối trả vượt gốc. Audit `Finance_App_Audit` giữ request/loan/operation/hash/time/payload/thông tin trước sửa.
+- Mỗi batch loan dùng marker command, revision khoản vay và slot dòng nếu tạo mới. Tất cả audit, dữ liệu, công thức nằm trong cùng batch. Hai khoản thu kiểm trên cùng số dư chỉ có một batch tiêu thụ revision. Sau retry phải đọc lại; không lấy mutex trong RAM làm bằng chứng.
+- Source/audit được đọc với kiểm audit trước/sau để tránh snapshot lệch khi app ghi đồng thời. Khi bật ghi, không sửa source trực tiếp song song bằng tay hoặc qua công cụ khác; marker không khóa các editor ngoài ứng dụng.
+- Formula adapter đọc locale thật: hỗ trợ English `en_*` và `vi_VN`; dấu phân cách được đổi bên ngoài quoted strings. Locale khác bị chặn, không tự đoán. Native test đã phát hiện lỗi locale và được sửa trước acceptance.
+- `POST /api/transaction-edit`: category, note, type THU/CHI, excluded, transactionId, baseRevision, requestId. Không sửa số tiền hoặc hàng nguồn. Append `Transaction_Edits` với trạng thái mới và base revision; read model phát lại chain, dữ liệu/chain sai thì 503. Marker revision chặn sửa đè; revision cũ trả 409 và giữ yêu cầu để xử lý.
+- GET transactions thêm categories/editingEnabled và revision trên từng record; GET interest thêm writesEnabled và ghi chú đã mask. Android dùng capability để mở biểu mẫu; backend cũ vẫn chỉ đọc, không giả đã lưu.
+- SQLite queue nâng version 1→2 bằng ADD COLUMN endpoint, giữ hàng đợi cũ. Cùng queue/Worker xử lý manual-transaction, loan-event, transaction-edit; không đổi tên Worker đã lưu trong WorkManager. Chỉ status xác nhận mới xóa payload. Xung đột/schema/cờ tắt/capacity giữ BLOCKED; retry sau timeout giữ cùng UUID.
+
+Chuẩn bị audit, **chỉ xem kế hoạch**:
+
+```powershell
+npm run audit:prepare -- --scope transactions
+npm run audit:prepare -- --scope loans
+```
+
+Chỉ sau owner approval cho đích ghi: thêm `--apply --backup D:\finance-private\unique-full-backup.json`. Script lưu full Sheets cell/formula/format/metadata JSON ngoài Git trước, kiểm lại trạng thái audit rồi thêm đúng tab/header cần thiết trong một batch. Scope loans dùng INTEREST_SPREADSHEET_ID, transactions dùng SPREADSHEET_ID. Không tự bật env flag. File backup phải mới và được bảo vệ quyền truy cập.
+
+Rollback thêm `--rollback`, vẫn dry-run mặc định; apply vẫn cần backup mới. Chỉ xóa audit tab nếu không có event hoặc marker. Đã có audit thì từ chối rollback, giữ cờ ghi tắt và phục hồi/đối soát trên bản sao; không xóa lịch sử để hạ schema.
+
+## Mapping/import nguồn công nợ hiện có
+
+Nguồn chủ dự án cung cấp là **native Google Sheets đã có lịch sử**, được dùng trực tiếp. Không append lại cùng dữ liệu vào một Loans/LoanEvents vật lý khác.
+
+`npm run loans:import` tạo dry-run canonical mapping và chỉ in counts/status; **không có --apply**. `--output <private-manifest.json>` và `--previous <private-manifest.json>` chỉ nhận file ngoài repository, tạo file mới bằng exclusive create.
+
+| Canonical domain | Native source | Identity/provenance |
+|---|---|---|
+| Loans | Khoản vay + từng đợt | Giữ mã khoản; không bịa rate chung khi các đợt khác rate |
+| LoanEvents DISBURSEMENT | Đợt giải ngân A:F | Stable mã đợt, source key, row và input hash |
+| LoanEvents PRINCIPAL_PAYMENT/INTEREST_PAYMENT | Giao dịch A:F | Legacy row identity + source key + input hash; hai receipt giống nhau ở hai dòng vẫn là hai event |
+
+Manifest nhận diện re-run, chặn dòng cũ đổi/xóa hoặc đổi nguồn; append hợp lệ giữ IDs cũ. Thiếu đợt hoặc dữ liệu không đủ tái dựng thì chặn toàn bộ, không đoán lịch sử/OPENING_BALANCE. Manifest không thay thế backup hay biên bản import thật. Không đưa manifest, borrower hoặc số tiền nguồn vào Git.
+
+Gia hạn/đổi rate/xóa event cần event có hiệu lực theo ngày hoặc reversal và quy tắc nghiệp vụ riêng; không dùng sửa metadata để hồi tố lãi. ADJUSTMENT tài chính chưa có semantics được chốt nên bị từ chối thay vì âm thầm đổi gốc/lãi.

@@ -75,4 +75,4 @@ Tài khoản → Theo dõi tiền lãi dùng kỳ tháng 25–25 và sổ Google
 - Báo cáo chọn hôm nay/7 ngày/tháng này/tháng trước/năm nay/tùy chọn, dùng cùng exclusion policy với API; có chiều ngày/ngân hàng/nguồn.
 - Lịch sử dùng GET /api/transactions phân trang riêng, có tìm kiếm/lọc/chi tiết; không giới hạn ở 5–10 dòng dashboard.
 - Ghi Thu/Chi lưu trên máy trước, đồng bộ POST /api/manual-transaction qua WorkManager. Để ghi lên backend phải chạy migration Transactions V2 đã được duyệt và kiểm tra quyền môi trường. Chưa migrate thì giữ blocked, không giả thành công.
-- Module công nợ hiện giữ API đọc 25–25; không đổi sổ nguồn hoặc tạo lịch sử giả. Chức năng mutation khoản vay/sửa giao dịch còn gate riêng được ghi trong kế hoạch.
+- Công nợ giữ 25–25, có biểu mẫu tạo khoản/giải ngân/thu gốc/thu lãi/sửa thông tin qua outbox và audit. Giao dịch có sửa category/note/Thu–Chi/loại khỏi báo cáo mà giữ nguồn. Hai capability mặc định tắt đến khi owner duyệt backup, chuẩn bị audit và nghiệm thu; không tạo lịch sử giả hoặc tự ghi sổ thật.

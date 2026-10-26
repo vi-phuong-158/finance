@@ -76,8 +76,10 @@ Không có `FINANCE_V1_RELEASE_CANDIDATE_PASS` cho tới khi toàn bộ gate b�
 - Ghi tay có API validate/auth/idempotency, canonical Transactions V2, SQLite outbox và Worker. Script migration backup/dry-run/readback/rollback đã có; **chưa chạy apply** trên nguồn thật.
 - Dedup đã thay bằng marker duy nhất + append literal trong cùng batch. Thử nghiệm **native Sheets tổng hợp riêng** 4 request cùng ID cho 1 dòng; 3 batch bị Google từ chối duplicate. Fixture 20 lời gọi song song và timeout cũng có test. Chưa đóng toàn bộ gate Android/Vercel/restart/offline/quota.
 - Sổ lãi hiện có đã đối soát readonly 3 khoản, 4 đợt, 3 receipt; 27/27 chỉ số khớp engine MONTHLY_25_V1. Không re-import, không thay dữ liệu hoặc lưu số tiền nguồn vào Git. Bổ sung golden flow ẩn danh và chặn tổng tiền vượt safe integer.
-- Chi tiết công nợ bổ sung tổng đã giải ngân, lãi lũy kế/đã thu, đáo hạn và timeline gộp theo ngày, format rate Việt Nam. Chưa có mutation khoản vay.
+- Chi tiết công nợ bổ sung tổng đã giải ngân, lãi lũy kế/đã thu, đáo hạn và timeline gộp theo ngày, format rate Việt Nam.
 - ADB kiểm tra không có thiết bị kết nối. Thiết bị thật/offline/notification replay và UI 360/412dp chưa chạy.
-- Mutation khoản vay và correction giao dịch chưa được triển khai. Chờ xác nhận phạm vi ghi có audit trước khi bổ sung endpoint, rồi mới kiểm tra migration/backup/rollback và runtime riêng. Không thay bằng thao tác ghi trực tiếp vào nguồn.
+- Chủ dự án đã xác nhận trực tiếp quyền thêm mã/test cho loan mutation và transaction correction, push nhánh và Draft PR. Đã triển khai hai endpoint có audit/cờ mặc định tắt, biểu mẫu và queue bền vững. Không ghi nguồn thật hoặc bật production.
+- Native test trên bảng tổng hợp riêng đã thử create/disburse/thu gốc/thu lãi/update, phát hiện rồi sửa locale adapter, tạo thêm khoản mới bằng code đã sửa. Hai yêu cầu thu gốc đồng thời chỉ một batch ghi. 18 chỉ số của hai khoản khớp công thức; audit sửa giao dịch giữ hàng nguồn và cập nhật đúng báo cáo. Đây chưa là Android/Vercel E2E.
+- Canonical loan import/adoption có manifest dry-run, provenance và idempotency validation; dùng trực tiếp native source thay vì nhân đôi sổ. Không có apply/re-import thật. Nghiệp vụ adjustment/reversal/rate change chưa được chốt, không âm thầm triển khai hồi tố.
 
 Vì còn mutation/audit migration, quyền môi trường và nghiệm thu thiết bị, chưa có phase nào được gắn PASS thay cho toàn bộ gate bắt buộc của phase đó.
