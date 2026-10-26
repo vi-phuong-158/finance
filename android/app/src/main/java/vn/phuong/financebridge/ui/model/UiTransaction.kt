@@ -20,6 +20,9 @@ data class UiTransaction(
     val timestamp: Long,
     val source: String,
     val isDuplicateCandidate: Boolean = false,
+    val revision: String = "0",
+    val note: String = "",
+    val excluded: Boolean = false,
 ) {
     companion object {
         fun create(
@@ -33,6 +36,9 @@ data class UiTransaction(
             timestamp: Long = System.currentTimeMillis(),
             source: String = "BANK_NOTIFICATION",
             isDuplicateCandidate: Boolean = false,
+            revision: String = "0",
+            note: String = "",
+            excluded: Boolean = false,
         ): UiTransaction {
             val formattedAmount = FinanceFormatters.formatVnd(
                 amount = amount,
@@ -53,6 +59,9 @@ data class UiTransaction(
                 timestamp = timestamp,
                 source = source,
                 isDuplicateCandidate = isDuplicateCandidate,
+                revision = revision,
+                note = note,
+                excluded = excluded,
             )
         }
     }

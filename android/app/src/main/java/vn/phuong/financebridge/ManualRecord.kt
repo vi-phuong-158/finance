@@ -17,7 +17,8 @@ data class ManualDraft(val requestId: String, val dateTime: String, val type: St
 }
 
 fun manualSyncState(code: Int, status: String?): String = when {
-    code in 200..299 && status in setOf("SAVED_TRANSACTION", "DUPLICATE_IGNORED") -> "SYNCED"
-    code in setOf(400, 401, 403, 404, 405, 409, 413, 415) || status == "MANUAL_SCHEMA_MIGRATION_REQUIRED" -> "BLOCKED"
+    code in 200..299 && status in setOf("SAVED_TRANSACTION", "DUPLICATE_IGNORED", "SAVED_LOAN_EVENT", "SAVED_TRANSACTION_EDIT") -> "SYNCED"
+    code in setOf(400, 401, 403, 404, 405, 409, 413, 415) || status in setOf("MANUAL_SCHEMA_MIGRATION_REQUIRED", "LOAN_AUDIT_MIGRATION_REQUIRED", "EDIT_SCHEMA_MIGRATION_REQUIRED",
+        "LOAN_WRITES_DISABLED", "TRANSACTION_EDITS_DISABLED", "LOAN_SIMULATION_ACTIVE", "LOAN_SOURCE_FULL", "EDIT_SOURCE_FULL", "LEDGER_SOURCE_FULL", "LOAN_LOCALE_UNSUPPORTED") -> "BLOCKED"
     else -> "PENDING"
 }

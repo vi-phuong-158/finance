@@ -18,14 +18,18 @@ class ManualSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             val secret = WebhookCredentialStore(applicationContext).getSecret().orEmpty()
             val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
                 .followRedirects(false).followSslRedirects(false).build()
-            for ((id, payload) in outbox.pending()) {
+            for ((id, payload, endpoint) in outbox.pending()) {
+                if (endpoint !in setOf("manual-transaction", "loan-event", "transaction-edit")) {
+                    outbox.update(id, "BLOCKED")
+                    continue
+                }
                 if (!WebhookConfiguration.isValid(BuildConfig.WEBHOOK_URL, secret)) {
                     outbox.update(id, "BLOCKED")
                     continue
                 }
                 outbox.update(id, "SYNCING")
                 try {
-                    val request = Request.Builder().url(BuildConfig.WEBHOOK_URL.removeSuffix("/api/transaction") + "/api/manual-transaction")
+                    val request = Request.Builder().url(BuildConfig.WEBHOOK_URL.removeSuffix("/api/transaction") + "/api/$endpoint")
                         .header("X-Webhook-Secret", secret).post(payload.toRequestBody("application/json".toMediaType())).build()
                     val state = client.newCall(request).execute().use { response ->
                         val json = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()

@@ -19,6 +19,7 @@ import vn.phuong.financebridge.ui.components.FinanceCard
 import vn.phuong.financebridge.ui.components.LoadingState
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.FinanceFormatters
+import vn.phuong.financebridge.LoanOperation
 
 @Composable
 fun InterestScreen(context: Context, onBack: () -> Unit) {
@@ -29,6 +30,8 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf<String?>(null) }
+    var form by remember { mutableStateOf<Pair<LoanOperation, InterestLoan?>?>(null) }
+    var savedMessage by remember { mutableStateOf<String?>(null) }
     fun load() {
         loading = true
         error = null
@@ -44,6 +47,7 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
             TextButton(onClick = onBack) { Text("Quay lại") }
             TextButton(onClick = { load() }, enabled = !loading) { Text("Làm mới") }
         }
+        savedMessage?.let { Text(it, modifier = Modifier.padding(horizontal = 20.dp), style = FinanceTheme.typography.bodyMedium) }
         when {
             loading -> LoadingState()
             error != null -> ErrorState(message = error!!, onRetry = { load() })
@@ -53,6 +57,8 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
                     item {
                         Text("Tiền lãi & Công nợ", style = FinanceTheme.typography.headlineLarge)
                         Text("Ngày xem ${displayDate(current.asOf)}", style = FinanceTheme.typography.caption)
+                        if (current.writesEnabled) Button(onClick = { form = LoanOperation.CREATE_LOAN to null }) { Text("+ Khoản vay mới") }
+                        else Text("Chưa mở chức năng ghi công nợ trên máy chủ. Dữ liệu hiện ở chế độ chỉ đọc.", style = FinanceTheme.typography.caption)
                     }
                     item {
                         FinanceCard(Modifier.fillMaxWidth()) {
@@ -99,6 +105,17 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
                                     InterestMetric("Lãi đã chốt lũy kế", loan.accrued)
                                     InterestMetric("Lãi đã thu", loan.paid)
                                     loan.maturity?.let { Text("Đáo hạn: ${displayDate(it)}") }
+                                    if (loan.note.isNotBlank()) Text(loan.note, style = FinanceTheme.typography.bodyMedium)
+                                    if (current.writesEnabled) {
+                                        Column {
+                                            TextButton(onClick = { form = LoanOperation.DISBURSEMENT to loan }) { Text("+ Giải ngân thêm") }
+                                            Row {
+                                                TextButton(onClick = { form = LoanOperation.PRINCIPAL_PAYMENT to loan }) { Text("Thu gốc") }
+                                                TextButton(onClick = { form = LoanOperation.INTEREST_PAYMENT to loan }) { Text("Thu lãi") }
+                                            }
+                                            TextButton(onClick = { form = LoanOperation.UPDATE_INFO to loan }) { Text("Sửa thông tin") }
+                                        }
+                                    }
                                     Text("Dòng thời gian", style = FinanceTheme.typography.titleMedium)
                                     (loan.disbursements + loan.payments).sortedByDescending { it.date }
                                         .forEach { entry -> InterestEntryRow(entry) }
@@ -109,6 +126,11 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
                 }
             }
         }
+    }
+    form?.let { (operation, loan) ->
+        LoanForm(context, operation, loan, data?.asOf ?: return@let, onDismiss = { form = null }, onQueued = {
+            form = null; savedMessage = "Đã lưu yêu cầu trên máy. Bấm Làm mới sau khi đồng bộ để xem kết quả."; load()
+        })
     }
 }
 

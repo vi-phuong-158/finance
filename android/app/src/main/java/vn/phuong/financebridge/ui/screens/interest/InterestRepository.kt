@@ -20,11 +20,13 @@ data class InterestLoan(
     val currentInterest: Long, val paid: Long, val status: String,
     val disbursements: List<InterestEntry>, val payments: List<InterestEntry>,
     val disbursed: Long, val accrued: Long, val maturity: String?,
+    val note: String = "",
 )
 data class InterestDashboard(
     val asOf: String, val from: String, val to: String, val principal: Long,
     val accrued: Long, val paid: Long, val due: Long, val currentInterest: Long,
     val currentRemaining: Long, val collected: Long, val advance: Long, val loans: List<InterestLoan>,
+    val writesEnabled: Boolean = false,
 )
 
 class InterestRepository(context: Context) {
@@ -80,11 +82,11 @@ class InterestRepository(context: Context) {
                 item.getLong("interestDue"), item.getLong("currentInterest"), item.getLong("paidInterest"),
                 item.getString("status"), disbursements, entries(item.getJSONArray("payments"), false),
                 disbursements.filter { it.date <= json.getString("asOf") }.sumOf { it.amount }, item.getLong("accruedInterest"),
-                if (item.isNull("maturity")) null else item.getString("maturity"))
+                if (item.isNull("maturity")) null else item.getString("maturity"), item.optString("note", ""))
         }
         return InterestDashboard(json.getString("asOf"), period.getString("from"), period.getString("to"),
             totals.getLong("outstandingPrincipal"), totals.getLong("accruedInterest"), totals.getLong("paidInterest"),
             totals.getLong("interestDue"), totals.getLong("currentInterest"), totals.getLong("currentRemaining"),
-            totals.getLong("collectedThisPeriod"), totals.getLong("advanceInterest"), loans)
+            totals.getLong("collectedThisPeriod"), totals.getLong("advanceInterest"), loans, json.optBoolean("writesEnabled", false))
     }
 }

@@ -18,6 +18,10 @@ import vn.phuong.financebridge.ui.data.parseTransaction
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.FinancePeriod
+import vn.phuong.financebridge.CategoryChoice
+
+private data class TransactionPage(val rows: List<UiTransaction>, val cursor: String?, val total: Int,
+    val categories: List<CategoryChoice>, val editingEnabled: Boolean)
 
 @Composable
 fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
@@ -39,6 +43,10 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
     var error by remember { mutableStateOf<String?>(null) }
     var inputError by remember { mutableStateOf<String?>(null) }
     var total by remember { mutableStateOf(0) }
+    var categories by remember { mutableStateOf<List<CategoryChoice>>(emptyList()) }
+    var editingEnabled by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<UiTransaction?>(null) }
+    var savedMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(filters, search, cursor, revision) {
         loading = true
@@ -48,12 +56,18 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
         val query = filters + mapOf("q" to search, "limit" to "50") + (cursor?.let { mapOf("cursor" to it) } ?: emptyMap())
         api.read("transactions", query) { json ->
             val values = json.getJSONArray("transactions")
-            Triple((0 until values.length()).map { parseTransaction(values.getJSONObject(it)) },
-                if (json.isNull("nextCursor")) null else json.getString("nextCursor"), json.getInt("total"))
+            val choices = json.optJSONArray("categories")
+            TransactionPage((0 until values.length()).map { parseTransaction(values.getJSONObject(it)) },
+                if (json.isNull("nextCursor")) null else json.getString("nextCursor"), json.getInt("total"),
+                if (choices == null) emptyList() else (0 until choices.length()).map {
+                    val choice = choices.getJSONObject(it); CategoryChoice(choice.getString("name"), choice.getString("type"))
+                }, json.optBoolean("editingEnabled", false))
         }.onSuccess { page ->
-            rows = if (cursor == null) page.first else rows + page.first
-            nextCursor = page.second
-            total = page.third
+            rows = if (cursor == null) page.rows else rows + page.rows
+            nextCursor = page.cursor
+            total = page.total
+            categories = page.categories
+            editingEnabled = page.editingEnabled
         }.onFailure { error = it.message }
         loading = false
     }
@@ -98,6 +112,7 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
             }
         }
         inputError?.let { Text(it, color = FinanceTheme.colors.expense) }
+        savedMessage?.let { Text(it, style = FinanceTheme.typography.bodyMedium) }
         if (loading && rows.isEmpty()) LoadingState()
         if (error != null) ErrorState(message = error!!, onRetry = { cursor = null; revision++ })
         if (!loading && error == null && rows.isEmpty()) EmptyState(title = "Không tìm thấy giao dịch", subtitle = "Thử đổi bộ lọc hoặc từ khóa.")
@@ -125,7 +140,16 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
                     Text(transaction.accountOrBank)
                     Text(when (transaction.source) { "MONEYLOVER" -> "Nguồn: Nhập lịch sử"; "MANUAL" -> "Nguồn: Ghi chép thủ công"; else -> "Nguồn: Thông báo ngân hàng" })
                     if (transaction.isDuplicateCandidate) Text("Có thể trùng giao dịch từ nguồn khác. Cần đối soát.", color = FinanceTheme.colors.expense)
+                    if (transaction.excluded) Text("Không tính vào tổng thu chi.")
+                    if (!editingEnabled) Text("Chưa mở chỉnh sửa trên máy chủ.", style = FinanceTheme.typography.caption)
                 }
-            }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Đóng") } })
+            }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Đóng") } },
+            dismissButton = { if (editingEnabled) TextButton(onClick = { editing = transaction; selected = null }) { Text("Sửa") } })
+    }
+    editing?.let { transaction ->
+        TransactionEditForm(context, transaction, categories, onDismiss = { editing = null }, onQueued = {
+            editing = null; selected = null; cursor = null; revision++
+            savedMessage = "Đã lưu thay đổi trên máy. Bấm Tải lại sau khi đồng bộ để xem kết quả."
+        })
     }
 }

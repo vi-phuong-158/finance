@@ -71,5 +71,6 @@ fun parseTransaction(item: JSONObject): UiTransaction {
         title = if (item.isNull("description")) category else item.getString("description").ifBlank { category },
         subtitle = "$account · ${when (source) { "MONEYLOVER" -> "Nhập lịch sử"; "MANUAL" -> "Ghi chép thủ công"; else -> "Thông báo ngân hàng" }}",
         category = category, accountOrBank = account, timestamp = FinanceFormatters.parseIsoDateToMillis(date),
-        source = source, isDuplicateCandidate = item.getBoolean("possibleDuplicate"))
+        source = source, isDuplicateCandidate = item.getBoolean("possibleDuplicate"), revision = item.optString("revision", "0"),
+        note = if (item.isNull("description")) "" else item.getString("description"), excluded = item.getBoolean("excludedFromReport"))
 }

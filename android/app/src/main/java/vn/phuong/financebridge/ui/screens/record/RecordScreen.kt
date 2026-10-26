@@ -330,7 +330,7 @@ fun RecordScreen(
         )
 
         message?.let { Text(it, style = FinanceTheme.typography.bodyMedium) }
-        Text("${queueCounts.first} đang chờ đồng bộ · ${queueCounts.second} cần gửi lại", style = FinanceTheme.typography.caption)
+        Text("${queueCounts.first} thay đổi đang chờ đồng bộ · ${queueCounts.second} cần xử lý", style = FinanceTheme.typography.caption)
         androidx.compose.material3.TextButton(onClick = {
             scope.launch {
                 withContext(Dispatchers.IO) { ManualOutbox(context).use { it.retryBlocked() } }
