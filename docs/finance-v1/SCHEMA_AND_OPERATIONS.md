@@ -58,7 +58,7 @@ Kiểm thử native 26/10/2026 trên **bảng tổng hợp riêng**: gửi 4 bat
 
 Dashboard API thêm `dailySummary`, `bankSummary`, `sourceSummary`; mọi chiều dùng cùng eligible totals, loại chuyển nội bộ và excluded history. Android không dùng mẫu khi lỗi hoặc rỗng. Các chu kỳ hôm nay/7 ngày/tháng này/tháng trước/năm nay/tùy chọn gửi `from,to` thật. Net được ghi rõ là dòng tiền ròng. Accounts ghi chưa có dữ liệu số dư.
 
-Ngân hàng hiện parse envelope VCB và hai envelope BIDV/VietinBank được chủ dự án cung cấp ngày 26/10. Fixture đổi toàn bộ thông tin cá nhân, tham chiếu, tiền và thời điểm. Trường không chắc như counterparty từ nội dung chuyển khoản để trống. Envelope lạ vẫn chuyển Raw_Capture đã che dữ liệu; không đoán và không backfill nguồn thật tự động.
+Ngân hàng hiện parse envelope VCB và hai envelope BIDV/VietinBank được chủ dự án cung cấp ngày 26/10. Fixture đổi toàn bộ thông tin cá nhân, tham chiếu, tiền và thời điểm. Trường không chắc như counterparty từ nội dung chuyển khoản để trống. Envelope lạ vẫn chuyển Raw_Capture đã che dữ liệu; không đoán và không backfill nguồn thật tự động. Che dữ liệu gồm hai lượt: dãy số đứng riêng (có dấu phân cách) ≥ 8 chữ số, rồi mọi dãy ≥ 8 chữ số liền nhau dính chữ (tài khoản ảo, mã tham chiếu); tiền/ngày/giờ được giữ. Dòng đã ghi trước thay đổi này không được viết lại.
 
 ## Ghi khoản vay và sửa giao dịch có audit
 

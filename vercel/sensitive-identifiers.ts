@@ -5,7 +5,10 @@ const IDENTIFIER = /(?<![\p{L}\p{N}])\d(?:[\d \u00a0.,/_-]*\d)?(?![\p{L}\p{N}])/
 
 function maskIdentifiers(value: string): string {
   return value.replace(IDENTIFIER, (candidate) =>
-    candidate.replace(/\D/g, '').length >= 8 ? '***' : candidate);
+    candidate.replace(/\D/g, '').length >= 8 ? '***' : candidate)
+    // Runs glued to letters (virtual accounts "XY00Z00000000000001", refs "#SP#0000…abc") escape the
+    // standalone pass above; mask only their digits so surrounding text and short codes stay readable.
+    .replace(/\d{8,}/g, '***');
 }
 
 export function maskSensitiveIdentifiers(text: string): string {

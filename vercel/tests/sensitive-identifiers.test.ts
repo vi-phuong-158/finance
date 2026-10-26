@@ -37,7 +37,8 @@ test('preserves 100,000 VND and common currency formats', () => {
   }
 });
 
-test('preserves date/time tokens and alphanumeric event codes', () => {
-  const text = '01-01-2026 12:00:00 / 2026-01-01 / 01/01/2026 Ref a999999999b';
+test('preserves date/time tokens and short alphanumeric codes; masks long digit runs inside codes', () => {
+  const text = '01-01-2026 12:00:00 / 2026-01-01 / 01/01/2026 Ref a9999999b';
   assert.equal(maskSensitiveIdentifiers(text), text);
+  assert.equal(maskSensitiveIdentifiers('Ref a999999999b'), 'Ref a***b');
 });
