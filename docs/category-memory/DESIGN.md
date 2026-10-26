@@ -66,7 +66,7 @@ Ví dụ: `GRAB REF111`/`GRAB REF999` → `GRAB` (Case C); `CT TNHH TM VA DV SIE
 
 Nguồn văn bản: VCB dùng `counterparty` lấy từ `Ref` (không dùng description vì đó là cùng `Ref` hoặc cả template khi thiếu `Ref`); BIDV dùng nội dung đã bỏ hậu tố `· Mã giao dịch: …`; VietinBank dùng nội dung.
 
-1. Có **đúng một** cụm `CT tu <tài khoản/***> <NGƯỜI CHUYỂN> toi <tài khoản/***> <NGƯỜI NHẬN> [tai <NGÂN HÀNG>] [(...)]` → bên kia là **người nhận nếu CHI**, **người chuyển nếu THU** (hướng lấy từ giao dịch gốc). Bỏ đuôi `(...)` và đúng một token ` tai <NGÂN HÀNG>` ở cuối (tên có chữ "TAI" vẫn giữ). Kết quả là tầng `COUNTERPARTY`.
+1. Có **đúng một** cụm `CT tu <tài khoản/***> <NGƯỜI CHUYỂN> toi <tài khoản/***> <NGƯỜI NHẬN> [tai <NGÂN HÀNG>] [(...)]` → bên kia là **người nhận nếu CHI**, **người chuyển nếu THU** (hướng lấy từ giao dịch gốc). Bỏ đuôi `(...)`; bỏ ` tai <X>` ở cuối **chỉ khi X thuộc danh sách mã/tên ngân hàng** `BANK_SUFFIXES` (cho phép thêm ` BANK`). "Tài" là tên riêng phổ biến: `NGUYEN VAN TAI AN`/`TAI BINH` giữ nguyên, không bao giờ thành `NGUYEN VAN`; ngân hàng lạ thì giữ cả cụm (khóa cụ thể hơn, không gộp). Kết quả là tầng `COUNTERPARTY`.
 2. Có dấu hiệu chuyển khoản khác (`chuyen tien`, `chuyen khoan`, `CK`, `IBFT`, `NAPAS`, `CT den/di`, `tu … toi`, nhiều cụm `CT tu`, `CT tu` thiếu tài khoản, nhiều `toi`) → **không có identity**. Lý do: tên hiển thị trong memo thường là chính chủ (vd `NGUYEN VAN CHU chuyen tien`) nên mọi người nhận sẽ bị gộp vào một rule.
 3. Không phải chuyển khoản (QR/POS/merchant) → toàn bộ văn bản chuẩn hóa (≤ 8 token): VCB → `COUNTERPARTY`, BIDV/VietinBank → `DESCRIPTION`.
 4. VCB không có `Ref` (`VCB Transaction`) → không có identity.

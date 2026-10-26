@@ -44,6 +44,16 @@ export function memoryLabel(text: string): string {
 
 const TRANSFER = /(?:^|[^A-Z0-9])CT TU (?:\*+|\d+) (.+?) TOI (?:\*+|\d+) (.+)$/;
 const TRANSFER_WORDS = / (?:CHUYEN TIEN|CHUYEN KHOAN|CK|IBFT|NAPAS|CT TU|CT DEN|CT DI|TRANSFER|TU .+ TOI) /;
+// Receiving-bank names/codes only (identifiers, not merchant rules). " TAI <token>" is stripped ONLY for these:
+// "Tài" is a common given name ("NGUYEN VAN TAI AN"), so an unknown token after TAI stays part of the name.
+export const BANK_SUFFIXES = new Set(['VCB', 'VIETCOMBANK', 'BIDV', 'VIETINBANK', 'CTG', 'AGRIBANK', 'TECHCOMBANK', 'TCB', 'MB', 'MBBANK',
+  'ACB', 'VPBANK', 'TPBANK', 'SACOMBANK', 'STB', 'HDBANK', 'VIB', 'SHB', 'SCB', 'OCB', 'MSB', 'SEABANK', 'EXIMBANK', 'NAMABANK',
+  'ABBANK', 'BACABANK', 'PVCOMBANK', 'LPBANK', 'KIENLONGBANK', 'VIETABANK', 'BAOVIETBANK', 'NCB', 'PGBANK', 'SAIGONBANK', 'GPBANK',
+  'OCEANBANK', 'CBBANK', 'VIETBANK', 'VRB', 'IVB', 'SHINHAN', 'WOORI', 'HSBC', 'CITIBANK', 'UOB', 'CIMB', 'CAKE', 'TIMO', 'UBANK', 'TNEX']);
+const stripReceivingBank = (receiver: string) => {
+  const m = / TAI ([A-Z0-9]+)(?: BANK)?$/.exec(receiver);
+  return m && BANK_SUFFIXES.has(m[1]) ? receiver.slice(0, m.index) : receiver;
+};
 
 // Bank free text: "CT tu <acct> <SENDER> toi <acct> <RECEIVER> [tai <BANK>] [(...)]" yields the other party
 // (receiver for CHI, sender for THU). Any other transfer wording is ambiguous: the visible name is often
@@ -54,7 +64,7 @@ export function extractBankParty(text: string, type: 'THU' | 'CHI'): { kind: 'PA
   if (starts === 1) {
     const m = TRANSFER.exec(flat);
     if (!m || / TOI /.test(` ${m[2]} `)) return null;
-    const receiver = m[2].replace(/\s*\([^()]*\)\s*$/, '').replace(/ TAI [A-Z0-9]+$/, '');
+    const receiver = stripReceivingBank(m[2].replace(/\s*\([^()]*\)\s*$/, ''));
     const name = memoryLabel(type === 'CHI' ? receiver : m[1]);
     return name ? { kind: 'PARTY', name } : null;
   }

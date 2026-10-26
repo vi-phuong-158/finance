@@ -425,3 +425,16 @@ test('end to end: three confirmations for one store preselect only that store, n
   assert.equal(find(list, keyOf(otherStore)!), undefined);
   assert.equal(list.length, 1);
 });
+
+test('" tai <bank>" is stripped only for known banks: given name Tài never truncates a receiver', () => {
+  const key = (receiver: string, tail = '') => vcbIdentity(vcbTransfer('-', '12345678901.567890', OWNER, receiver, tail))?.key;
+  const an = key('NGUYEN VAN TAI AN'), binh = key('NGUYEN VAN TAI BINH'), son = key('NGUYEN VAN TAI SON');
+  assert.deepEqual([an, binh, son], ['COUNTERPARTY:NGUYEN VAN TAI AN', 'COUNTERPARTY:NGUYEN VAN TAI BINH', 'COUNTERPARTY:NGUYEN VAN TAI SON']);
+  for (const k of [an, binh, son]) assert.notEqual(k, 'COUNTERPARTY:NGUYEN VAN');
+  assert.equal(key('NGUYEN VAN TAI AN', ' tai VCB'), 'COUNTERPARTY:NGUYEN VAN TAI AN');
+  assert.equal(key('NGUYEN VAN TAI', ' tai MB BANK'), 'COUNTERPARTY:NGUYEN VAN TAI');
+  assert.equal(key('CT TNHH TM VA DV SIÊU THỊ AN LẠC', ' tai MB'), 'COUNTERPARTY:TNHH TM VA DV SIEU THI AN LAC');
+  assert.equal(key('CT TNHH TM VA DV SIÊU THỊ AN LẠC', ' tai Techcombank (0912345678)'), 'COUNTERPARTY:TNHH TM VA DV SIEU THI AN LAC');
+  // Unknown receiving bank: kept verbatim (a stable, more specific key), never cut into a shorter shared name.
+  assert.equal(key('LE VAN B', ' tai XYZBANK'), 'COUNTERPARTY:LE VAN B TAI XYZBANK');
+});
