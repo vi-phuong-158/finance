@@ -19,7 +19,7 @@ class ManualSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
                 .followRedirects(false).followSslRedirects(false).build()
             for ((id, payload, endpoint) in outbox.pending()) {
-                if (endpoint !in setOf("manual-transaction", "loan-event", "transaction-edit")) {
+                if (endpoint !in setOf("manual-transaction", "loan-event", "transaction-edit", "category-memory")) {
                     outbox.update(id, "BLOCKED")
                     continue
                 }

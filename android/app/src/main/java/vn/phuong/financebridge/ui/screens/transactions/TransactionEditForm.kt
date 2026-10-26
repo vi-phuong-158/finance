@@ -14,18 +14,30 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import vn.phuong.financebridge.CategoryChoice
+import vn.phuong.financebridge.CategoryMemory
+import vn.phuong.financebridge.CategoryMemoryIndex
 import vn.phuong.financebridge.TransactionEditInput
+import vn.phuong.financebridge.ui.components.CategorySuggestionCard
 import vn.phuong.financebridge.ui.data.queueMutation
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import java.util.UUID
 
 @Composable
-fun TransactionEditForm(context: Context, transaction: UiTransaction, categories: List<CategoryChoice>, onDismiss: () -> Unit, onQueued: () -> Unit) {
+fun TransactionEditForm(context: Context, transaction: UiTransaction, categories: List<CategoryChoice>, memory: CategoryMemoryIndex?,
+    onDismiss: () -> Unit, onQueued: () -> Unit) {
     val scope = rememberCoroutineScope()
     val id = rememberSaveable { UUID.randomUUID().toString() }
     var type by rememberSaveable { mutableStateOf(transaction.type.name) }
-    var category by rememberSaveable { mutableStateOf(transaction.category) }
+    var category by rememberSaveable {
+        mutableStateOf(CategoryMemory.preselectForEdit(CategoryMemory.suggest(memory, transaction.memoryKey, transaction.type.name),
+            transaction.source, transaction.revision, transaction.category))
+    }
+    var hideSuggestion by rememberSaveable { mutableStateOf(false) }
+    // Rules are per direction, so switching Thu/Chi looks up a different rule.
+    val suggestion = CategoryMemory.suggest(memory, transaction.memoryKey, type)
+        ?.takeIf { categories.any { c -> c.name == it.category } }
+        ?.takeIf { !(it.category == transaction.category && (transaction.revision != "0" || transaction.source == "MANUAL")) }
     var note by rememberSaveable { mutableStateOf(transaction.note) }
     var excluded by rememberSaveable { mutableStateOf(transaction.excluded) }
     var menu by remember { mutableStateOf(false) }
@@ -52,6 +64,12 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
                         }
                     }
                 }
+                if (suggestion != null && !hideSuggestion) CategorySuggestionCard(suggestion, applied = category == suggestion.category,
+                    onApply = { category = suggestion.category },
+                    onDismiss = {
+                        if (category == suggestion.category && category != transaction.category) category = transaction.category
+                        hideSuggestion = true
+                    })
                 OutlinedTextField(note, { note = it }, label = { Text("Ghi chú") })
                 Row { Checkbox(checked = excluded, onCheckedChange = { excluded = it }); Text("Không tính vào báo cáo", modifier = Modifier.padding(top = 12.dp)) }
                 if (category == "Chuyển nội bộ") Text("Chuyển nội bộ luôn được loại khỏi tổng thu chi.", style = FinanceTheme.typography.caption)

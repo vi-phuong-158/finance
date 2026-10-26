@@ -23,6 +23,7 @@ data class UiTransaction(
     val revision: String = "0",
     val note: String = "",
     val excluded: Boolean = false,
+    val memoryKey: String? = null,
 ) {
     companion object {
         fun create(
@@ -39,6 +40,7 @@ data class UiTransaction(
             revision: String = "0",
             note: String = "",
             excluded: Boolean = false,
+            memoryKey: String? = null,
         ): UiTransaction {
             val formattedAmount = FinanceFormatters.formatVnd(
                 amount = amount,
@@ -62,6 +64,7 @@ data class UiTransaction(
                 revision = revision,
                 note = note,
                 excluded = excluded,
+                memoryKey = memoryKey,
             )
         }
     }

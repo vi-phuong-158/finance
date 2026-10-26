@@ -1,14 +1,16 @@
 import { hasExpectedHeaders } from './sheet-schema.js';
 import { EDIT_HEADERS } from './edit-schema.js';
 import { LOAN_AUDIT_HEADERS } from './loan-audit-schema.js';
+import { MEMORY_HEADERS } from './category-memory.js';
 
-export type AuditScope = 'transactions' | 'loans';
+export type AuditScope = 'transactions' | 'loans' | 'category-memory';
 export type AuditTable = { id: number; title: string; columns: number; rows: unknown[][]; hasMarkers: boolean };
 export type AuditState = { tables: AuditTable[]; existingIds: number[] };
 export function auditSchema(scope: AuditScope) {
-  if (scope !== 'transactions' && scope !== 'loans') throw new Error('INVALID_SCOPE');
-  return scope === 'transactions' ? { title: 'Transaction_Edits', headers: EDIT_HEADERS }
-    : { title: 'Finance_App_Audit', headers: LOAN_AUDIT_HEADERS };
+  if (scope === 'transactions') return { title: 'Transaction_Edits', headers: EDIT_HEADERS };
+  if (scope === 'loans') return { title: 'Finance_App_Audit', headers: LOAN_AUDIT_HEADERS };
+  if (scope === 'category-memory') return { title: 'Category_Memory', headers: MEMORY_HEADERS };
+  throw new Error('INVALID_SCOPE');
 }
 export function planAuditMigration(state: AuditState, scope: AuditScope, rollback = false): Record<string, unknown>[] {
   const { title, headers } = auditSchema(scope), matches = state.tables.filter((t) => t.title === title);

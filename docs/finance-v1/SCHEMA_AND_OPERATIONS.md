@@ -99,3 +99,7 @@ Nguồn chủ dự án cung cấp là **native Google Sheets đã có lịch s�
 Manifest nhận diện re-run, chặn dòng cũ đổi/xóa hoặc đổi nguồn; append hợp lệ giữ IDs cũ. Thiếu đợt hoặc dữ liệu không đủ tái dựng thì chặn toàn bộ, không đoán lịch sử/OPENING_BALANCE. Manifest không thay thế backup hay biên bản import thật. Không đưa manifest, borrower hoặc số tiền nguồn vào Git.
 
 Gia hạn/đổi rate/xóa event cần event có hiệu lực theo ngày hoặc reversal và quy tắc nghiệp vụ riêng; không dùng sửa metadata để hồi tố lãi. ADJUSTMENT tài chính chưa có semantics được chốt nên bị từ chối thay vì âm thầm đổi gốc/lãi.
+
+## Gợi ý danh mục từ lịch sử (Category Memory)
+
+Thiết kế đầy đủ: `docs/category-memory/DESIGN.md`. Hai cờ mặc định tắt: `CATEGORY_MEMORY_ENABLED=0` (GET `/api/category-memory`, `memoryKey` trên GET transactions) và `CATEGORY_MEMORY_WRITES_ENABLED=0` (POST lệnh SET/DELETE/RESET_ALL). Ghi nhớ được suy ra từ giao dịch ghi tay và `Transaction_Edits`; không có bộ đếm riêng, không auto-submit. Tab `Category_Memory` (6 cột, append-only) chỉ cần cho lệnh quản lý: chuẩn bị bằng `npm run audit:prepare -- --scope category-memory` (dry-run), apply cần `--apply --backup <ngoài repo>` do chủ dự án chạy. Tắt cờ là rollback hoàn toàn.

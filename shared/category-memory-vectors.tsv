@@ -1,0 +1,17 @@
+# input<TAB>expected normalizeMemoryText. \uXXXX escapes are decoded by both test suites.
+GRAB REF111	GRAB
+GRAB REF999	GRAB
+GRAB*TRIP-ABC12	GRAB TRIP
+CT TNHH TM VA DV SIEU THI AN LAC	TNHH TM VA DV SIEU THI AN LAC
+  Siêu   thị  An Lạc  	SIEU THI AN LAC
+Sie\u0302u thi\u0323	SIEU THI
+Điện lực Hà Nội	DIEN LUC HA NOI
+MBVCB.***.***.NGUYEN VAN A chuyen tien	NGUYEN VAN A CHUYEN TIEN
+QR 12345 POS	
+A	
+Thanh toán Shopee đơn 240101ABC	THANH TOAN SHOPEE DON
+one two three four five six seven eight nine ten	ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT
+Café 12:30 28/02/2026	CAFE
+Nhà\u00a0thuốc Long Châu	NHA THUOC LONG CHAU
+Straße 5	STRA E
+Ăn sáng · Mã giao dịch: TEST-REF-A	AN SANG MA GIAO DICH TEST A
