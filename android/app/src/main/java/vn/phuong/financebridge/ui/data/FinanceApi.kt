@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import vn.phuong.financebridge.BuildConfig
+import vn.phuong.financebridge.CategoryMemory
 import vn.phuong.financebridge.WebhookConfiguration
 import vn.phuong.financebridge.WebhookCredentialStore
 import vn.phuong.financebridge.ui.model.TransactionType
@@ -24,7 +25,7 @@ class FinanceApi(context: Context) {
     suspend fun <T> read(endpoint: String, query: Map<String, String> = emptyMap(), decode: (JSONObject) -> T): Result<T> =
         withContext(Dispatchers.IO) {
             try {
-                require(endpoint in setOf("dashboard", "transactions"))
+                require(endpoint in setOf("dashboard", "transactions", "category-memory"))
                 val secret = credentials.getSecret().orEmpty()
                 if (!WebhookConfiguration.isValid(BuildConfig.WEBHOOK_URL, secret)) {
                     error("Hãy nhập mã kết nối trong Khác → Kết nối & hệ thống.")
@@ -72,5 +73,6 @@ fun parseTransaction(item: JSONObject): UiTransaction {
         subtitle = "$account · ${when (source) { "MONEYLOVER" -> "Nhập lịch sử"; "MANUAL" -> "Ghi chép thủ công"; else -> "Thông báo ngân hàng" }}",
         category = category, accountOrBank = account, timestamp = FinanceFormatters.parseIsoDateToMillis(date),
         source = source, isDuplicateCandidate = item.getBoolean("possibleDuplicate"), revision = item.optString("revision", "0"),
-        note = if (item.isNull("description")) "" else item.getString("description"), excluded = item.getBoolean("excludedFromReport"))
+        note = if (item.isNull("description")) "" else item.getString("description"), excluded = item.getBoolean("excludedFromReport"),
+        memoryKey = if (item.has("memoryKey") && !item.isNull("memoryKey")) item.getString("memoryKey").takeIf(CategoryMemory::validKey) else null)
 }

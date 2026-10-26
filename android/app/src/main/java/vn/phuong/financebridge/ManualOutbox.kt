@@ -25,7 +25,7 @@ class ManualOutbox(context: Context) : SQLiteOpenHelper(context.applicationConte
     }
 
     fun enqueueRequest(requestId: String, payload: String, endpoint: String) {
-        require(endpoint in setOf("manual-transaction", "loan-event", "transaction-edit"))
+        require(endpoint in setOf("manual-transaction", "loan-event", "transaction-edit", "category-memory"))
         require(java.util.UUID.fromString(requestId).version() == 4)
         require(JSONObject(payload).getString("requestId") == requestId && payload.toByteArray(Charsets.UTF_8).size <= 8192)
         val values = ContentValues().apply {

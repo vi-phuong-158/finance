@@ -24,6 +24,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 import java.util.UUID
+import vn.phuong.financebridge.CategoryMemory
+import vn.phuong.financebridge.CategoryMemoryIndex
 import vn.phuong.financebridge.ManualDraft
 import vn.phuong.financebridge.ManualOutbox
 import vn.phuong.financebridge.ManualSyncWorker
@@ -38,9 +40,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import vn.phuong.financebridge.ui.components.CategorySuggestionCard
 import vn.phuong.financebridge.ui.components.FinanceCard
 import vn.phuong.financebridge.ui.components.FinanceChip
 import vn.phuong.financebridge.ui.components.PrimaryButton
+import vn.phuong.financebridge.ui.data.CategoryMemoryRepository
 import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -72,6 +76,14 @@ fun RecordScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var queueCounts by remember { mutableStateOf(0 to 0) }
     val scope = rememberCoroutineScope()
+    val memoryRepository = remember(context) { CategoryMemoryRepository(context) }
+    var memory by remember { mutableStateOf<CategoryMemoryIndex?>(null) }
+    var categoryPicked by remember { mutableStateOf(false) }
+    var hiddenKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        memory = memoryRepository.cached()
+        memory = memoryRepository.refresh().index
+    }
     LaunchedEffect(Unit) {
         while (true) {
             queueCounts = withContext(Dispatchers.IO) { ManualOutbox(context).use { it.counts() } }
@@ -95,7 +107,12 @@ fun RecordScreen(
     )
 
     val accounts = listOf("Vietcombank", "VietinBank", "BIDV", "Tiền mặt")
-    LaunchedEffect(selectedType) { selectedCategory = categories.first().name }
+    LaunchedEffect(selectedType) { selectedCategory = categories.first().name; categoryPicked = false }
+    // Manual entries have no counterparty, so the note is the (Tier 3) identity.
+    val noteKey = CategoryMemory.descriptionKey(description)
+    val suggestion = CategoryMemory.suggest(memory, noteKey, if (selectedType == ExtendedTransactionType.THU) "THU" else "CHI")
+        ?.takeIf { noteKey != hiddenKey }
+    LaunchedEffect(suggestion?.rule) { selectedCategory = CategoryMemory.preselectForRecord(suggestion, categoryPicked, selectedCategory) }
 
     Column(
         modifier = modifier
@@ -226,7 +243,7 @@ fun RecordScreen(
                         CategoryTile(
                             item = cat,
                             isSelected = selectedCategory == cat.name,
-                            onClick = { selectedCategory = cat.name },
+                            onClick = { selectedCategory = cat.name; categoryPicked = true },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -241,7 +258,7 @@ fun RecordScreen(
                         CategoryTile(
                             item = cat,
                             isSelected = selectedCategory == cat.name,
-                            onClick = { selectedCategory = cat.name },
+                            onClick = { selectedCategory = cat.name; categoryPicked = true },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -292,6 +309,14 @@ fun RecordScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = FinanceTheme.shapes.medium,
                 )
+                suggestion?.let { s ->
+                    CategorySuggestionCard(s, applied = selectedCategory == s.category,
+                        onApply = { selectedCategory = s.category; categoryPicked = true },
+                        onDismiss = {
+                            if (!categoryPicked && selectedCategory == s.category) selectedCategory = categories.first().name
+                            hiddenKey = noteKey
+                        })
+                }
                 OutlinedTextField(dateText, { dateText = it }, label = { Text("Ngày giờ (dd/MM/yyyy HH:mm)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
             }
@@ -319,7 +344,7 @@ fun RecordScreen(
                             }
                             message = "Đã lưu trên máy. Giao dịch sẽ xuất hiện trong sổ sau khi đồng bộ."
                             requestId = UUID.randomUUID().toString()
-                            amountText = ""; description = ""
+                            amountText = ""; description = ""; categoryPicked = false; hiddenKey = null
                             onSaved()
                         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (_: Exception) { message = "Chưa lưu được giao dịch. Vui lòng thử lại." }

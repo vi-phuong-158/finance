@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import vn.phuong.financebridge.ui.components.FinanceCard
 import vn.phuong.financebridge.ui.components.SecondaryButton
+import vn.phuong.financebridge.ui.screens.memory.CategoryMemoryScreen
 import vn.phuong.financebridge.ui.screens.settings.SettingsScreen
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -30,7 +31,37 @@ fun MoreScreen(
     modifier: Modifier = Modifier,
 ) {
     var showSystemSettings by remember { mutableStateOf(false) }
+    var showMemory by remember { mutableStateOf(false) }
     var activeDialog by remember { mutableStateOf<String?>(null) }
+
+    if (showMemory) {
+        Column(modifier = modifier.fillMaxSize().background(FinanceTheme.colors.background)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showMemory = false }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Quay lại",
+                    tint = FinanceTheme.colors.primary,
+                )
+                Text(
+                    text = "Khác",
+                    style = FinanceTheme.typography.titleMedium,
+                    color = FinanceTheme.colors.primary,
+                )
+            }
+            CategoryMemoryScreen(
+                context = context,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        return
+    }
 
     if (showSystemSettings) {
         Column(modifier = modifier.fillMaxSize().background(FinanceTheme.colors.background)) {
@@ -124,6 +155,23 @@ fun MoreScreen(
                 iconBg = Color(0xFFAB47BC).copy(alpha = 0.12f),
                 title = "Danh mục chi tiêu",
                 subtitle = "Xem bảng phân loại thu chi và danh mục mặc định",
+            )
+        }
+
+        // 3b. Ghi nhớ phân loại
+        FinanceCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showMemory = true },
+            shape = FinanceTheme.shapes.xLarge,
+            contentPadding = 18.dp,
+        ) {
+            MoreRow(
+                icon = Icons.Rounded.History,
+                iconTint = FinanceTheme.colors.primary,
+                iconBg = FinanceTheme.colors.primaryContainer,
+                title = "Ghi nhớ phân loại",
+                subtitle = "Xem, sửa hoặc xóa gợi ý danh mục từ lịch sử",
             )
         }
 

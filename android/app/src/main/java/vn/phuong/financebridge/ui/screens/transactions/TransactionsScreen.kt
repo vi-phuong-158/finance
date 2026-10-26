@@ -19,6 +19,8 @@ import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.FinancePeriod
 import vn.phuong.financebridge.CategoryChoice
+import vn.phuong.financebridge.CategoryMemoryIndex
+import vn.phuong.financebridge.ui.data.CategoryMemoryRepository
 
 private data class TransactionPage(val rows: List<UiTransaction>, val cursor: String?, val total: Int,
     val categories: List<CategoryChoice>, val editingEnabled: Boolean)
@@ -47,6 +49,14 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
     var editingEnabled by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<UiTransaction?>(null) }
     var savedMessage by remember { mutableStateOf<String?>(null) }
+    val memoryRepository = remember(context) { CategoryMemoryRepository(context) }
+    var memory by remember { mutableStateOf<CategoryMemoryIndex?>(null) }
+
+    LaunchedEffect(revision) {
+        // Cache first so suggestions appear instantly and offline; refresh replaces it when online.
+        memory = memoryRepository.cached()
+        memory = memoryRepository.refresh().index
+    }
 
     LaunchedEffect(filters, search, cursor, revision) {
         loading = true
@@ -147,7 +157,7 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
             dismissButton = { if (editingEnabled) TextButton(onClick = { editing = transaction; selected = null }) { Text("Sửa") } })
     }
     editing?.let { transaction ->
-        TransactionEditForm(context, transaction, categories, onDismiss = { editing = null }, onQueued = {
+        TransactionEditForm(context, transaction, categories, memory, onDismiss = { editing = null }, onQueued = {
             editing = null; selected = null; cursor = null; revision++
             savedMessage = "Đã lưu thay đổi trên máy. Bấm Tải lại sau khi đồng bộ để xem kết quả."
         })
