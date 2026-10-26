@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.model.UiCategoryMetric
@@ -33,24 +34,33 @@ fun CategoryProgress(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
+                modifier = Modifier.weight(1f, fill = false),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
                     text = category.name,
                     style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                     color = FinanceTheme.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "(${category.transactionCount})",
                     style = FinanceTheme.typography.caption,
                     color = FinanceTheme.colors.textMuted,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = category.formattedAmount,
                 style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = FinanceTheme.colors.textPrimary,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
         }
 

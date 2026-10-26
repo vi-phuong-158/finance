@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.theme.FinanceTheme
@@ -82,9 +83,12 @@ fun BalanceCard(
             }
 
             Text(
-                text = if (isAmountVisible) balanceText else "•••••••• đ",
+                text = if (isAmountVisible) balanceText else "••••••••\u00A0đ",
                 style = FinanceTheme.typography.balance.copy(fontSize = 34.sp),
                 color = Color.White,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
 
             Row(
@@ -96,7 +100,11 @@ fun BalanceCard(
                     text = "Tổng hợp từ dữ liệu giao dịch",
                     style = FinanceTheme.typography.caption,
                     color = Color.White.copy(alpha = 0.80f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .clip(FinanceTheme.shapes.pill)
@@ -107,6 +115,8 @@ fun BalanceCard(
                         text = periodLabel,
                         style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
                         color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }

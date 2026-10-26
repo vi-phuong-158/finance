@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -64,6 +65,9 @@ fun AccountsScreen(
                     text = dashboardData.formattedBalance,
                     style = FinanceTheme.typography.balance.copy(fontSize = 32.sp),
                     color = FinanceTheme.colors.textPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "Tổng hợp từ dữ liệu giao dịch đang có",
@@ -256,6 +260,9 @@ private fun BankSourceItem(
             text = balance,
             style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
             color = FinanceTheme.colors.textMuted,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

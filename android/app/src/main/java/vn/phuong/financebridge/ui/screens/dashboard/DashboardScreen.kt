@@ -13,7 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.components.*
 import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.theme.FinanceTheme
@@ -100,13 +102,13 @@ fun DashboardScreen(
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 18.dp,
+            contentPadding = 12.dp,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionHeader(title = "Tình hình thu chi")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     SummaryStat(
                         label = "Tổng thu",
@@ -202,15 +204,26 @@ private fun SummaryStat(
     ) {
         Text(
             text = label,
-            style = FinanceTheme.typography.caption,
+            style = FinanceTheme.typography.caption.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            ),
             color = FinanceTheme.colors.textMuted,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = value,
-            style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = FinanceTheme.typography.caption.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.3).sp,
+            ),
             color = valueColor,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

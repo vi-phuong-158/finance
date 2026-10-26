@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -72,13 +73,13 @@ fun ReportsScreen(
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 18.dp,
+            contentPadding = 12.dp,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionHeader(title = "Tình hình thu chi")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     ReportStatItem(
                         title = "Tổng thu",
@@ -163,15 +164,22 @@ fun ReportsScreen(
                                 }
                                 Text(
                                     text = item.title,
-                                    style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    style = FinanceTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp,
+                                    ),
                                     color = FinanceTheme.colors.textPrimary,
                                     maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = item.subtitle,
-                                    style = FinanceTheme.typography.caption,
+                                    style = FinanceTheme.typography.caption.copy(fontSize = 11.sp),
                                     color = FinanceTheme.colors.textMuted,
                                     maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -238,15 +246,26 @@ private fun ReportStatItem(
     ) {
         Text(
             text = title,
-            style = FinanceTheme.typography.caption,
+            style = FinanceTheme.typography.caption.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            ),
             color = FinanceTheme.colors.textMuted,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = value,
-            style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = FinanceTheme.typography.caption.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.3).sp,
+            ),
             color = color,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

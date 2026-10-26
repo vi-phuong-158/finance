@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import vn.phuong.financebridge.ui.components.FinanceCard
@@ -238,11 +239,16 @@ private fun MoreRow(
                 text = title,
                 style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = FinanceTheme.colors.textPrimary,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = subtitle,
                 style = FinanceTheme.typography.caption,
                 color = FinanceTheme.colors.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Icon(

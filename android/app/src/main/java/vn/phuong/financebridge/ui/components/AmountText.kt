@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -17,6 +18,9 @@ fun AmountText(
     style: TextStyle = FinanceTheme.typography.titleMedium,
     color: Color? = null,
     fontWeight: FontWeight? = null,
+    maxLines: Int = 1,
+    softWrap: Boolean = false,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
 ) {
     val textColor = color ?: when (type) {
         TransactionType.THU -> FinanceTheme.colors.income
@@ -30,5 +34,8 @@ fun AmountText(
         style = style,
         color = textColor,
         fontWeight = fontWeight ?: style.fontWeight,
+        maxLines = maxLines,
+        softWrap = softWrap,
+        overflow = overflow,
     )
 }

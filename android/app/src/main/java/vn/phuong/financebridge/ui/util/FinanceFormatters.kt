@@ -27,7 +27,7 @@ object FinanceFormatters {
             amount < 0 -> "-"
             else -> ""
         }
-        return "$sign$formattedNumber đ"
+        return "$sign$formattedNumber\u00A0đ"
     }
 
     fun formatFriendlyDate(epochMillis: Long): String {

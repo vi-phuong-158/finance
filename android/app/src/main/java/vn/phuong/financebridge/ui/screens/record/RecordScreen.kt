@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.components.FinanceCard
@@ -341,6 +342,8 @@ private fun TypeSelectorChip(
             ),
             color = textColor,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -387,6 +390,8 @@ private fun CategoryTile(
             ),
             color = if (isSelected) FinanceTheme.colors.textPrimary else FinanceTheme.colors.textSecondary,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
