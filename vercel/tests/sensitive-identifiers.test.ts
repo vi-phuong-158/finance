@@ -28,7 +28,9 @@ test('masks card-length identifiers and multiple identifiers', () => {
 
 test('preserves transaction amounts and balance while masking the account', () => {
   assert.equal(maskSensitiveIdentifiers('TK 9999 999 999 +100,000 VND SD 999999999 VND'), 'TK *** +100,000 VND SD 999999999 VND');
-  assert.equal(maskSensitiveIdentifiers('GD TK 9999-999-999 +100000000'), 'GD TK *** +100000000');
+  // A sign without a currency unit is not an amount (phones, refs): long runs are masked, the sign stays.
+  assert.equal(maskSensitiveIdentifiers('GD TK 9999-999-999 +100000000'), 'GD TK *** +***');
+  assert.equal(maskSensitiveIdentifiers('GD +100000000 VND -25,000 VND -25,000'), 'GD +100000000 VND -25,000 VND -25,000');
 });
 
 test('preserves 100,000 VND and common currency formats', () => {
@@ -37,7 +39,8 @@ test('preserves 100,000 VND and common currency formats', () => {
   }
 });
 
-test('preserves date/time tokens and alphanumeric event codes', () => {
-  const text = '01-01-2026 12:00:00 / 2026-01-01 / 01/01/2026 Ref a999999999b';
+test('preserves date/time tokens and short alphanumeric codes; masks long digit runs inside codes', () => {
+  const text = '01-01-2026 12:00:00 / 2026-01-01 / 01/01/2026 Ref a9999999b';
   assert.equal(maskSensitiveIdentifiers(text), text);
+  assert.equal(maskSensitiveIdentifiers('Ref a999999999b'), 'Ref a***b');
 });
