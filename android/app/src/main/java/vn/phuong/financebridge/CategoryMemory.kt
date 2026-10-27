@@ -74,8 +74,14 @@ object CategoryMemory {
     fun preselectForEdit(s: CategorySuggestion?, source: String, revision: String, current: String): String =
         if (s != null && s.preselect && (current == UNCATEGORIZED || (source == "BANK_NOTIFICATION" && revision == "0"))) s.category else current
 
-    fun preselectForRecord(s: CategorySuggestion?, userPicked: Boolean, current: String): String =
-        if (s != null && s.preselect && !userPicked) s.category else current
+    // Returns (category to show, auto-pick still standing). An auto-pick is undone once the note no longer
+    // yields a preselecting suggestion, so a stale guess is never saved (and learned) as the user's choice.
+    fun preselectForRecord(s: CategorySuggestion?, userPicked: Boolean, current: String, autoPicked: String?, default: String): Pair<String, String?> = when {
+        userPicked -> current to null
+        s != null && s.preselect -> s.category to s.category
+        autoPicked != null && current == autoPicked -> default to null
+        else -> current to null
+    }
 }
 
 class CategoryMemoryStore(private val file: File) {

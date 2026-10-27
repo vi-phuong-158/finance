@@ -60,9 +60,24 @@ class CategoryMemoryTest {
 
     @Test fun userOverrideIsNeverReplacedBySuggestion() {
         val strong = CategoryMemory.suggest(index(rule("STRONG", 6, 7)), party, "CHI")
-        assertEquals("Gia đình", CategoryMemory.preselectForRecord(strong, userPicked = false, current = "Ăn uống"))
-        assertEquals("Ăn uống", CategoryMemory.preselectForRecord(strong, userPicked = true, current = "Ăn uống"))
-        assertEquals("Ăn uống", CategoryMemory.preselectForRecord(null, userPicked = false, current = "Ăn uống"))
+        assertEquals("Gia đình" to "Gia đình", CategoryMemory.preselectForRecord(strong, userPicked = false, current = "Ăn uống", autoPicked = null, default = "Ăn uống"))
+        assertEquals("Ăn uống" to null, CategoryMemory.preselectForRecord(strong, userPicked = true, current = "Ăn uống", autoPicked = null, default = "Ăn uống"))
+        assertEquals("Ăn uống" to null, CategoryMemory.preselectForRecord(null, userPicked = false, current = "Ăn uống", autoPicked = null, default = "Ăn uống"))
+    }
+
+    @Test fun automaticPickIsUndoneWhenSuggestionNoLongerMatches() {
+        val strong = CategoryMemory.suggest(index(rule("STRONG", 6, 7)), party, "CHI")
+        val hint = CategoryMemory.suggest(index(rule("HINT", 1, 1)), party, "CHI")
+        val other = CategoryMemory.suggest(index(rule("STRONG", 6, 7, category = "Ăn uống")), party, "CHI")
+        // Note edited to text with no memory: the auto-picked category must not linger.
+        assertEquals("Ăn uống" to null, CategoryMemory.preselectForRecord(null, userPicked = false, current = "Gia đình", autoPicked = "Gia đình", default = "Ăn uống"))
+        // A weaker suggestion no longer preselects, so the earlier auto-pick is undone too.
+        assertEquals("Ăn uống" to null, CategoryMemory.preselectForRecord(hint, userPicked = false, current = "Gia đình", autoPicked = "Gia đình", default = "Ăn uống"))
+        // A different preselecting rule replaces the earlier auto-pick.
+        assertEquals("Ăn uống" to "Ăn uống", CategoryMemory.preselectForRecord(other, userPicked = false, current = "Gia đình", autoPicked = "Gia đình", default = "Gia đình"))
+        // The user's own choice survives even when it equals the earlier auto-pick.
+        assertEquals("Gia đình" to null, CategoryMemory.preselectForRecord(null, userPicked = true, current = "Gia đình", autoPicked = "Gia đình", default = "Ăn uống"))
+        assertEquals("Gia đình" to "Gia đình", CategoryMemory.preselectForRecord(strong, userPicked = false, current = "Gia đình", autoPicked = "Gia đình", default = "Ăn uống"))
     }
 
     @Test fun localCacheSurvivesAppRestartAndOfflineRefresh() {
