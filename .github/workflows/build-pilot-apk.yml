@@ -1,4 +1,4 @@
-name: Build VCB pilot APK
+name: Build signed release APK
 
 on:
   workflow_dispatch:
@@ -39,6 +39,8 @@ jobs:
     needs: admission
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Signing secrets live only in this environment; protect it with a required reviewer.
+    environment: release-signing
     defaults:
       run:
         working-directory: android
@@ -57,26 +59,62 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
-      - name: Build public-safe pilot APK
+      - name: Restore release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         shell: bash
         run: |
           set -euo pipefail
-          ./gradlew --no-daemon assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy validateReleaseWebhookConfig
-          test -s app/build/outputs/apk/debug/app-debug.apk
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then
+            printf '%s\n' 'RELEASE_SIGNING_MISSING: set ANDROID_KEYSTORE_BASE64 in the release-signing environment.' >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          printf 'ANDROID_KEYSTORE_PATH=%s\n' "$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Build signed release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # run_number only grows for this workflow file; renaming the file resets it, so raise the offset if that ever happens.
+          version_code=$((1000 + GITHUB_RUN_NUMBER))
+          ./gradlew --no-daemon assembleRelease testDebugUnitTest verifyWebhookConfigurationPolicy validateReleaseWebhookConfig -PversionCode="$version_code"
+          test -s app/build/outputs/apk/release/app-release.apk
+          printf 'VERSION_CODE=%s\n' "$version_code" >> "$GITHUB_ENV"
+      - name: Verify release signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          certs=$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk)
+          if grep -q 'CN=Android Debug' <<<"$certs"; then
+            printf '%s\n' 'SECURITY VIOLATION: release APK is signed with a debug key.' >&2
+            exit 1
+          fi
+          # The certificate digest is public; it must stay identical across builds or updates will be refused.
+          grep 'certificate SHA-256 digest' <<<"$certs" | tee -a "$GITHUB_STEP_SUMMARY"
+          printf 'versionCode: %s\n' "$VERSION_CODE" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Remove release keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/release.jks"
       - name: Security scan APK artifact
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import os, zipfile
-          bc_path = 'app/build/generated/source/buildConfig/debug/vn/phuong/financebridge/BuildConfig.java'
+          bc_path = 'app/build/generated/source/buildConfig/release/vn/phuong/financebridge/BuildConfig.java'
           assert os.path.isfile(bc_path), 'BuildConfig not found'
           with open(bc_path) as f:
               bc_content = f.read()
           assert 'WEBHOOK_SECRET' not in bc_content, 'SECURITY VIOLATION: BuildConfig contains WEBHOOK_SECRET'
           assert 'WEBHOOK_URL' in bc_content, 'BuildConfig must contain WEBHOOK_URL'
 
-          apk_path = 'app/build/outputs/apk/debug/app-debug.apk'
+          apk_path = 'app/build/outputs/apk/release/app-release.apk'
           assert os.path.isfile(apk_path), 'APK not found'
           with zipfile.ZipFile(apk_path, 'r') as z:
               dex_files = [n for n in z.namelist() if n.endswith('.dex')]
@@ -88,8 +126,8 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: finance-bridge-vcb-pilot-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: finance-bridge-release-apk-${{ env.VERSION_CODE }}
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
           compression-level: 0

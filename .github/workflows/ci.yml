@@ -54,6 +54,13 @@ jobs:
             exit 1
           fi
           grep -q 'Release builds require a valid HTTPS /api/transaction endpoint' "$RUNNER_TEMP/insecure-endpoint-check.log"
+      - name: Reject release builds without a release signing key
+        run: |
+          if ./gradlew --no-daemon validateReleaseSigning > "$RUNNER_TEMP/unsigned-release-check.log" 2>&1; then
+            echo 'Release signing validation unexpectedly succeeded without signing secrets'
+            exit 1
+          fi
+          grep -q 'Release signing requires ANDROID_KEYSTORE_PATH' "$RUNNER_TEMP/unsigned-release-check.log"
       - name: Security scan APK artifact and BuildConfig
         run: |
           python3 - <<'PY'

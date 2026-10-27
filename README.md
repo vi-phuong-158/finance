@@ -63,7 +63,7 @@ Dedup đọc toàn bộ cột ID của cả hai tab để tương thích lịch 
 ## Kiểm tra tự động
 
 Workflow `.github/workflows/ci.yml` chạy `npm ci`, `npm test`, `npm run typecheck` trên Node 24.11.0 và `assembleDebug testDebugUnitTest verifyWebhookConfigurationPolicy validateReleaseWebhookConfig` cùng security scan trên JDK 17/Android SDK 34.
-Workflow `.github/workflows/build-pilot-apk.yml` build public-safe APK và upload artifact `finance-bridge-vcb-pilot-apk` khi được kích hoạt qua `workflow_dispatch`.
+Workflow `.github/workflows/build-pilot-apk.yml` build APK release ký bằng khóa cố định (secret trong environment `release-signing`), `versionCode` tăng theo mỗi lần chạy, và upload artifact `finance-bridge-release-apk-<versionCode>` khi được kích hoạt qua `workflow_dispatch`. Cách tạo khóa, đặt secret và thử cập nhật đè: `docs/RELEASE_SIGNING.md`.
 
 
 ## Theo dõi tiền lãi
