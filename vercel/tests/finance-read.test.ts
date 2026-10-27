@@ -98,6 +98,14 @@ test('all transaction filters are enforced and search ignores accents', () => {
     assert.throws(() => parseFinanceQuery(query), /INVALID_QUERY/);
   }
 });
+test('id filter returns exactly that transaction so an edit can start from its latest revision', () => {
+  const rows = fromFinanceSnapshot(financeFixture());
+  const target = rows[2];
+  assert.deepEqual(filterTransactions(rows, parseFinanceQuery({ id: target.id })).map((t) => t.id), [target.id]);
+  assert.equal(filterTransactions(rows, parseFinanceQuery({ id: 'unknown-id' })).length, 0);
+  assert.throws(() => parseFinanceQuery({ id: 'x'.repeat(201) }), /INVALID_QUERY/);
+  assert.throws(() => parseFinanceQuery({ id: target.id }, true), /INVALID_QUERY/);
+});
 test('signed pagination yields bounded pages without repeats; forged, filter-changed and stale cursors are rejected', () => {
   const rows = fromFinanceSnapshot(financeFixture()), q = parseFinanceQuery({ limit: '2' });
   const first = paginateTransactions(rows, q, SYNTHETIC_SECRET);

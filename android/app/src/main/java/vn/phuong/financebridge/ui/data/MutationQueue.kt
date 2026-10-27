@@ -14,3 +14,10 @@ suspend fun queueMutation(context: Context, id: String, payload: String, endpoin
         ManualSyncWorker.schedule(context)
     }
 }
+
+suspend fun supersedeEdit(context: Context, oldId: String, id: String, payload: String) {
+    withContext(Dispatchers.IO + NonCancellable) {
+        ManualOutbox(context).use { it.supersede(oldId, id, payload) }
+        ManualSyncWorker.schedule(context)
+    }
+}

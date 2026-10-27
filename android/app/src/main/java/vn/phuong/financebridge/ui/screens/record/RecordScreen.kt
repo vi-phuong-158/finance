@@ -366,6 +366,8 @@ fun RecordScreen(
                 ManualSyncWorker.schedule(context)
             }
         }) { Text("Gửi lại giao dịch đang chờ") }
+        if (queueCounts.second > 0) Text("Xung đột hoặc yêu cầu bị từ chối không tự gửi lại: xem Khác → Thay đổi cần xử lý.",
+            style = FinanceTheme.typography.caption, color = FinanceTheme.colors.expense)
 
         Text(
             text = "Giao dịch được giữ trên máy khi mất mạng. Nếu cần gửi lại, hãy kiểm tra mã kết nối trong Khác. Không nhập lại cùng giao dịch để tránh trùng.",

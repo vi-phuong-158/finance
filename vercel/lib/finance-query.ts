@@ -4,9 +4,10 @@ import { validDate } from './moneylover/schema.js';
 import { transactionKey } from './unified-transactions.js';
 import type { UnifiedTransaction } from './unified-transactions.js';
 
-export type FinanceQuery = { from?: string; to?: string; type?: string; category?: string; bank?: string; wallet?: string; source?: string; q?: string; limit: number; cursor?: string };
+export type FinanceQuery = { from?: string; to?: string; type?: string; category?: string; bank?: string; wallet?: string; source?: string; q?: string; id?: string; limit: number; cursor?: string };
 export function parseFinanceQuery(input: Record<string, unknown>, dashboard = false, now = new Date()): FinanceQuery {
-  const allowed = new Set(['from', 'to', 'type', 'category', 'bank', 'wallet', 'source', 'q', ...(dashboard ? ['month', 'year'] : ['limit', 'cursor'])]);
+  // `id` lets the app fetch one transaction's latest revision before editing it.
+  const allowed = new Set(['from', 'to', 'type', 'category', 'bank', 'wallet', 'source', 'q', ...(dashboard ? ['month', 'year'] : ['limit', 'cursor', 'id'])]);
   for (const [key, value] of Object.entries(input)) {
     if (!allowed.has(key) || typeof value !== 'string' || value.length > (key === 'cursor' ? 2048 : 200)) throw new Error('INVALID_QUERY');
   }
@@ -39,7 +40,7 @@ export function parseFinanceQuery(input: Record<string, unknown>, dashboard = fa
   for (const key of ['type', 'bank', 'source'] as const) {
     if (q[key] !== undefined) { if (!enums[key].includes(q[key])) throw new Error('INVALID_QUERY'); result[key] = q[key]; }
   }
-  for (const key of ['category', 'wallet', 'q'] as const) if (q[key] !== undefined) result[key] = q[key];
+  for (const key of ['category', 'wallet', 'q', 'id'] as const) if (q[key] !== undefined) result[key] = q[key];
   if (q.limit !== undefined) {
     if (!/^\d{1,3}$/.test(q.limit) || Number(q.limit) < 1 || Number(q.limit) > 100) throw new Error('INVALID_QUERY');
     result.limit = Number(q.limit);
@@ -48,7 +49,7 @@ export function parseFinanceQuery(input: Record<string, unknown>, dashboard = fa
   return result;
 }
 export function filterTransactions(rows: UnifiedTransaction[], q: FinanceQuery): UnifiedTransaction[] {
-  return rows.filter((t) => (!q.from || t.date >= q.from) && (!q.to || t.date <= q.to)
+  return rows.filter((t) => (!q.id || t.id === q.id) && (!q.from || t.date >= q.from) && (!q.to || t.date <= q.to)
     && (!q.type || t.type === q.type) && (!q.category || t.category === q.category)
     && (!q.bank || t.bank === q.bank) && (!q.wallet || (t.source === 'MONEYLOVER' && t.accountOrWallet === q.wallet))
     && (!q.source || t.source === q.source) && (!q.q || normalizeCategoryText([t.description, t.counterparty, t.category, t.accountOrWallet, t.event].join(' ')).includes(normalizeCategoryText(q.q))));
