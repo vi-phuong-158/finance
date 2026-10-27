@@ -1,5 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { CATEGORY_REGISTRY } from './categories.js';
+import { validWebhookSecret } from './configuration.js';
+import type { Environment } from './configuration.js';
 import { hasExpectedHeaders } from './sheet-schema.js';
 import { fromFinanceSnapshot } from './unified-transactions.js';
 import type { FinanceSnapshot, UnifiedTransaction } from './unified-transactions.js';
@@ -14,12 +16,15 @@ const TIER_FACTOR = { ACCOUNT: 1, COUNTERPARTY: 1, DESCRIPTION: 0.85 } as const;
 // Bank-generated markers only. Never merchant names: the system must learn categories, not hard-code them.
 export const TECHNICAL_TOKENS = new Set(['MBVCB', 'IBFT', 'REF', 'TRACE', 'FT', 'QR', 'POS', 'ECOM', 'NAPAS', 'CT', 'CK', 'GD', 'TK', 'ND', 'VND', 'DEN']);
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-export const IDENTITY_KEY = /^(?:ACCOUNT:(?:VCB|BIDV|VIETINBANK):[a-f0-9]{32}|(?:COUNTERPARTY|DESCRIPTION):[A-Z0-9]+(?: [A-Z0-9]+){0,7})$/;
+export const IDENTITY_KEY = /^(?:ACCOUNT:[a-f0-9]{32}|(?:COUNTERPARTY|DESCRIPTION):[A-Z0-9]+(?: [A-Z0-9]+){0,7})$/;
+// Tab Transaction_Identity: one keyed account identity per bank transaction, written in the same batch as it.
+export const IDENTITY_HEADERS = ['event_id', 'identity_key', 'label', 'created_at'];
 
 export type IdentityType = keyof typeof TIER_FACTOR;
 export type Identity = { type: IdentityType; key: string; label: string };
+// `account` is the Tier 1 identity stored at ingest; it can never be derived again because the Sheet holds masked text.
 export type IdentitySource = { source: UnifiedTransaction['source']; bank: string | null; type: 'THU' | 'CHI';
-  counterpartyAccount?: string | null; counterparty: string | null; description: string | null };
+  account?: Identity | null; counterparty: string | null; description: string | null };
 export type Observation = { transactionId: string; identity: Identity; type: 'THU' | 'CHI'; category: string; at: string };
 export type MemoryCommand = { requestId: string; action: 'SET' | 'DELETE' | 'RESET_ALL'; identityKey: string; type: '' | 'THU' | 'CHI'; category: string; createdAt: string };
 export type MemoryLevel = 'HINT' | 'AMBIGUOUS' | 'PRESELECT' | 'STRONG';
@@ -78,14 +83,52 @@ export function memoryIdentityKey(secret: string): Buffer {
   return createHmac('sha256', secret).update('category-memory-identity-v1').digest();
 }
 
-export function resolveIdentity(source: IdentitySource, hmacKey: Buffer): Identity | null {
-  const account = (source.counterpartyAccount ?? '').replace(/[\s.-]/g, '');
-  if (/^\d{6,20}$/.test(account) && ['VCB', 'BIDV', 'VIETINBANK'].includes(source.bank ?? '')) {
-    // Accounts are low-entropy: keyed HMAC so neither the Sheet nor the client cache can reverse them.
-    const digest = createHmac('sha256', hmacKey).update(`${source.bank}:${account}`).digest('hex').slice(0, 32);
-    const name = memoryLabel(source.counterparty ?? '');
-    return { type: 'ACCOUNT', key: `ACCOUNT:${source.bank}:${digest}`, label: `${name || 'Tài khoản'} · ${source.bank} ••${account.slice(-4)}` };
+// Dedicated key (decision Q3): rotating WEBHOOK_SECRET must not silently re-key account memory. Missing ⇒ Tier 1 is off.
+export function accountIdentityKey(env: Environment): Buffer | null {
+  const secret = env.CATEGORY_MEMORY_HMAC_KEY ?? '';
+  return validWebhookSecret(secret) && secret !== env.WEBHOOK_SECRET ? memoryIdentityKey(secret) : null;
+}
+
+const ACCOUNT_TRANSFER = /(?:^|[^A-Z0-9])CT TU ([A-Z0-9]*\d[A-Z0-9]*) (.+?) TOI ([A-Z0-9]*\d[A-Z0-9]*) (.+)$/;
+// Same "CT tu <acct> X toi <acct> Y" shape as extractBankParty, but on the raw text before masking.
+// Receiver for CHI, sender for THU; the bank is only known from a trailing " tai <BANK>" on the receiver.
+export function extractCounterpartyAccount(text: string, type: 'THU' | 'CHI'): { account: string; bank: string | null } | null {
+  const flat = fold(text).toUpperCase().replace(/\s+/g, ' ').trim();
+  if ((flat.match(/(?:^|[^A-Z0-9])CT TU /g)?.length ?? 0) !== 1) return null;
+  const m = ACCOUNT_TRANSFER.exec(flat);
+  if (!m || / TOI /.test(` ${m[4]} `) || m[1] === m[3]) return null;
+  const account = type === 'CHI' ? m[3] : m[1];
+  if (!/^[A-Z0-9]{6,32}$/.test(account)) return null;
+  const bank = type === 'CHI' ? / TAI ([A-Z0-9]+)(?: BANK)?$/.exec(m[4].replace(/\s*\([^()]*\)\s*$/, ''))?.[1] : undefined;
+  return { account, bank: bank && BANK_SUFFIXES.has(bank) ? bank : null };
+}
+
+export function accountIdentity(text: string, type: 'THU' | 'CHI', hmacKey: Buffer): Identity | null {
+  const found = extractCounterpartyAccount(text, type);
+  if (!found) return null;
+  // Accounts are low-entropy: keyed HMAC so neither the Sheet nor the client cache can reverse them.
+  const digest = createHmac('sha256', hmacKey).update(`ACCOUNT:${found.account}`).digest('hex').slice(0, 32);
+  const name = extractBankParty(text, type)?.name;
+  return { type: 'ACCOUNT', key: `ACCOUNT:${digest}`, label: `${name || 'Tài khoản'}${found.bank ? ` · ${found.bank}` : ''} ••${found.account.slice(-4)}` };
+}
+
+// Keyed by transaction id. An identity whose transaction is absent is ignored; malformed rows fail closed.
+export function readAccountIdentities(rows: unknown[][] | undefined): Map<string, Identity> {
+  const identities = new Map<string, Identity>();
+  if (!rows) return identities;
+  if (!hasExpectedHeaders(rows[0] ?? [], IDENTITY_HEADERS)) throw new Error('FINANCE_SCHEMA_MISMATCH');
+  for (const r of rows.slice(1).filter((row) => row.some((v) => v !== '' && v != null))) {
+    const [eventId, key, label, createdAt] = r;
+    if (r.length > IDENTITY_HEADERS.length || typeof eventId !== 'string' || !/^[a-f0-9]{64}$/.test(eventId)
+      || typeof key !== 'string' || !/^ACCOUNT:[a-f0-9]{32}$/.test(key) || typeof label !== 'string' || !label.trim() || label.length > 120 || /[\t\r\n|]/.test(label)
+      || typeof createdAt !== 'string' || !Number.isFinite(Date.parse(createdAt)) || identities.has(`bank:${eventId}`)) throw new Error('INVALID_FINANCE_ROW');
+    identities.set(`bank:${eventId}`, { type: 'ACCOUNT', key, label });
   }
+  return identities;
+}
+
+export function resolveIdentity(source: IdentitySource): Identity | null {
+  if (source.account) return source.account;
   const party = (name: string): Identity => ({ type: 'COUNTERPARTY', key: `COUNTERPARTY:${name}`, label: name });
   const described = (name: string): Identity => ({ type: 'DESCRIPTION', key: `DESCRIPTION:${name}`, label: name });
   if (source.source === 'BANK_NOTIFICATION') {
@@ -104,16 +147,16 @@ export function resolveIdentity(source: IdentitySource, hmacKey: Buffer): Identi
   return note ? described(note) : null;
 }
 
-const identitySource = (t: UnifiedTransaction): IdentitySource => ({ source: t.source, bank: t.bank, type: t.type, counterparty: t.counterparty, description: t.description });
-
 // Identity always comes from the ORIGINAL stored fields, never from an edited note or client input.
-export function originalIdentities(snapshot: FinanceSnapshot, hmacKey: Buffer): Map<string, Identity | null> {
+export function originalIdentities(snapshot: FinanceSnapshot): Map<string, Identity | null> {
+  const accounts = readAccountIdentities(snapshot.identities);
   return new Map(fromFinanceSnapshot({ bank: snapshot.bank, history: snapshot.history })
-    .map((t) => [t.id, resolveIdentity(identitySource(t), hmacKey)]));
+    .map((t) => [t.id, resolveIdentity({ source: t.source, bank: t.bank, type: t.type, account: t.source === 'BANK_NOTIFICATION' ? accounts.get(t.id) : null,
+      counterparty: t.counterparty, description: t.description })]));
 }
 
-export function memoryObservations(snapshot: FinanceSnapshot, hmacKey: Buffer): Observation[] {
-  const identities = originalIdentities(snapshot, hmacKey);
+export function memoryObservations(snapshot: FinanceSnapshot): Observation[] {
+  const identities = originalIdentities(snapshot);
   const lastEdit = new Map<string, string>();
   // fromFinanceSnapshot validated the whole chain; rows are in revision order so the last one wins.
   for (const row of (snapshot.edits ?? []).slice(1)) if (typeof row[1] === 'string' && typeof row[7] === 'string') lastEdit.set(row[1], row[7]);
@@ -188,7 +231,7 @@ export function buildMemoryIndex(observations: Observation[], commands: MemoryCo
     const level: MemoryLevel = window.length === 1 ? 'HINT' : count < 2 || count === second || confidence < 0.6 ? 'AMBIGUOUS'
       : window.length >= 4 && confidence >= 0.8 ? 'STRONG' : 'PRESELECT';
     // A rule created only by SET has no observed identity; its key is the safest available label.
-    const label = r.identity?.label ?? key.slice(key.indexOf(':') + 1).replace(/^(?:VCB|BIDV|VIETINBANK):[a-f0-9]{32}$/, 'Tài khoản');
+    const label = r.identity?.label ?? key.slice(key.indexOf(':') + 1).replace(/^[a-f0-9]{32}$/, 'Tài khoản');
     result.push({ key, identityType, label, type: r.type, category, count, total: window.length, confidence, level,
       recent: [...counts].sort((a, b) => b[1].last - a[1].last).map(([name]) => name).slice(0, 3),
       lastUsedAt: window.at(-1)!.at, pinned: window.some((e) => e.order.startsWith('0|')) });

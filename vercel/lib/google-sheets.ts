@@ -16,13 +16,17 @@ export async function makeGoogleSheetsPort(config: {
 
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = config.spreadsheetId;
-  async function appendOnce(title: string, row: unknown[], idIndex: number) {
+  async function appendOnce(title: string, row: unknown[], idIndex: number, identity?: unknown[] | null) {
     const eventId = String(row[idIndex]);
     const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets(properties(sheetId,title))' });
-    const sheetId = meta.data.sheets?.find((s) => s.properties?.title === title)?.properties?.sheetId;
+    const id = (name: string) => meta.data.sheets?.find((s) => s.properties?.title === name)?.properties?.sheetId;
+    const sheetId = id(title);
     if (sheetId == null) throw new Error('SHEET_NOT_FOUND');
+    // Without a prepared Transaction_Identity tab the transaction is still saved; only Tier 1 memory is skipped.
+    const identitySheetId = identity ? id('Transaction_Identity') : null;
+    const extra = identity && identitySheetId != null ? { sheetId: identitySheetId, row: identity } : undefined;
     return guardedAppend(() => sheets.spreadsheets.batchUpdate({ spreadsheetId,
-      requestBody: { requests: atomicAppendRequests(sheetId, eventId, row) } }), async () => {
+      requestBody: { requests: atomicAppendRequests(sheetId, eventId, row, extra) } }), async () => {
       const range = title === 'Transactions' ? 'Transactions!I:I' : 'Raw_Capture!D:D';
       const ids = await sheets.spreadsheets.values.get({ spreadsheetId, range, majorDimension: 'COLUMNS' });
       return (ids.data.values?.[0] ?? []).includes(eventId);
@@ -53,8 +57,8 @@ export async function makeGoogleSheetsPort(config: {
         rawIds: response.data.valueRanges?.[1]?.values?.[0] ?? [],
       };
     },
-    async appendTransaction(row: unknown[]) {
-      return appendOnce('Transactions', row, 8);
+    async appendTransaction(row: unknown[], identity?: unknown[] | null) {
+      return appendOnce('Transactions', row, 8, identity);
     },
     async appendRaw(row: unknown[]) {
       return appendOnce('Raw_Capture', row, 3);

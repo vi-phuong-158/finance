@@ -14,7 +14,7 @@ export type UnifiedTransaction = {
   possibleDuplicate: boolean; possibleDuplicateCount: number;
   revision: string;
 };
-export type FinanceSnapshot = { bank: unknown[][]; history: unknown[][]; edits?: unknown[][] };
+export type FinanceSnapshot = { bank: unknown[][]; history: unknown[][]; edits?: unknown[][]; identities?: unknown[][] };
 export type FinanceReadPort = { readFinance: () => Promise<FinanceSnapshot> };
 export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransaction[] {
   if (!hasTransactionHeaders(snapshot.bank[0] ?? [])

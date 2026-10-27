@@ -42,12 +42,14 @@ Mỗi giao dịch có **tối đa một** identity — tầng cao nhất có d�
 
 | Tầng | Điều kiện | Khóa | Hệ số tin cậy |
 |---|---|---|---|
-| 1 `ACCOUNT` | Có số tài khoản đối tác có cấu trúc (6–20 chữ số sau khi bỏ khoảng trắng/`.`/`-`) và bank ∈ VCB/BIDV/VIETINBANK | `ACCOUNT:<BANK>:<HMAC-SHA256 32 hex>` | 1.00 |
+| 1 `ACCOUNT` | Thông báo có đúng một cụm `CT tu <TK> X toi <TK> Y` (TK 6–32 ký tự chữ/số, có chữ số, chưa che, hai TK khác nhau) và đã lưu vào tab `Transaction_Identity` lúc nhận | `ACCOUNT:<HMAC-SHA256 32 hex>` | 1.00 |
 | 2 `COUNTERPARTY` | Bên kia của chuyển khoản tách được chắc chắn, merchant VCB `Ref` không phải chuyển khoản, Money Lover "Với" | `COUNTERPARTY:<chuẩn hóa>` | 1.00 |
 | 3 `DESCRIPTION` | Nội dung BIDV/VietinBank không phải chuyển khoản; ghi chú ghi tay/Money Lover | `DESCRIPTION:<chuẩn hóa>` | 0.85 |
 
-- Tầng 1 **khóa theo ngân hàng** (Case A: `VCB:123456` ≠ `BIDV:123456`). Số tài khoản không bao giờ lưu/trả về: khóa là HMAC với khóa con `HMAC(WEBHOOK_SECRET, "category-memory-identity-v1")` (số tài khoản ít entropy nên không dùng SHA thuần). Hiển thị chỉ `••1234`.
-- **Giới hạn trung thực:** hiện chưa parser nào cung cấp số tài khoản đối tác có cấu trúc và Sheet chỉ chứa bản đã che, nên tầng 1 có đầy đủ hợp đồng + test nhưng **chưa có nguồn dữ liệu**; giao dịch thật hiện rơi vào tầng 2/3. Thêm nguồn tầng 1 cần envelope ngân hàng được chủ dự án xác nhận (không đoán format).
+- **Nguồn tầng 1 (27/10/2026):** `transaction-service` trích số tài khoản đối tác từ văn bản gốc **trước khi che** (CHI → người nhận, THU → người chuyển), tính `HMAC(HMAC(CATEGORY_MEMORY_HMAC_KEY, "category-memory-identity-v1"), "ACCOUNT:<TK>")`, cắt 32 hex, rồi ghi `[event_id, identity_key, label, created_at]` vào tab `Transaction_Identity` **trong cùng batch nguyên tử** với dòng `Transactions`. Số tài khoản gốc không rời hàm; Sheet và API chỉ thấy khóa + nhãn `<TÊN> [· <NGÂN HÀNG>] ••1234`.
+- Khóa **chỉ theo số tài khoản**, không theo ngân hàng (quyết định Q2): thông báo thường không ghi ngân hàng đối tác; ngân hàng chỉ hiển thị khi có hậu tố `tai <NH>` thuộc `BANK_SUFFIXES`. Chấp nhận rủi ro rất nhỏ hai ngân hàng trùng số tài khoản.
+- Khóa HMAC **riêng** `CATEGORY_MEMORY_HMAC_KEY` (32–128 ký tự, khác `WEBHOOK_SECRET`; quyết định Q3). Thiếu/sai ⇒ giao dịch vẫn ghi bình thường, chỉ không lưu định danh. Đổi khóa ⇒ định danh cũ không còn khớp với giao dịch mới (không tự đổi). Chưa có tab ⇒ giao dịch vẫn ghi, bỏ qua định danh.
+- Đọc: `google-finance-read` đọc thêm tab khi có (fail-closed khi header/dòng sai, cột lạ); identity lưu sẵn thắng tầng 2/3 cho đúng giao dịch đó. Giao dịch nhận trước khi bật **không** có tầng 1 (Sheet chỉ còn bản đã che). Hiện chỉ mẫu `CT tu … toi …` (VCB, VietinBank) được nhận; mẫu khác cần envelope chủ dự án xác nhận.
 - Tầng 2/3 **không khóa theo ngân hàng**: cùng merchant trả bằng VCB hay BIDV là một merchant.
 - Rule = `(identity, THU|CHI)`: cùng người nhưng chi (Gia đình) và thu (Tiền chuyển đến) là hai rule riêng.
 - Identity luôn tính từ **trường gốc** của giao dịch (trước khi sửa ghi chú), server tự suy ra; client không gửi identity cho đường học.
@@ -71,7 +73,7 @@ Nguồn văn bản: VCB dùng `counterparty` lấy từ `Ref` (không dùng desc
 3. Không phải chuyển khoản (QR/POS/merchant) → toàn bộ văn bản chuẩn hóa (≤ 8 token): VCB → `COUNTERPARTY`, BIDV/VietinBank → `DESCRIPTION`.
 4. VCB không có `Ref` (`VCB Transaction`) → không có identity.
 
-Hệ quả có chủ đích: chuyển khoản không tách chắc được thì **không bao giờ** được gợi ý/chọn sẵn; người dùng vẫn chọn tay như cũ. Hai người trùng tên (không có số tài khoản) vẫn có thể chung rule — giới hạn còn lại cho tới khi có tầng 1.
+Hệ quả có chủ đích: chuyển khoản không tách chắc được thì **không bao giờ** được gợi ý/chọn sẵn; người dùng vẫn chọn tay như cũ. Hai người trùng tên vẫn có thể chung rule khi thông báo không có số tài khoản đối tác (hoặc chưa bật tầng 1); có số tài khoản thì tầng 1 tách riêng.
 Đánh đổi chấp nhận: hai chi nhánh chỉ khác số (`… AN LAC 2`) gộp làm một — cùng chuỗi cửa hàng, cùng mục đích phân loại. Tên khác chữ không bao giờ bị gộp; không bỏ tiền tố pháp lý, không fuzzy match. Không có luật merchant cứng (không "Grab = Đi lại").
 
 ## 4. Quan sát (observation) và ngữ nghĩa sửa giao dịch
@@ -143,7 +145,7 @@ Rule trả về: `key, identityType, label, type, category, count, total, confid
 
 | Rủi ro | Biện pháp |
 |---|---|
-| Lộ số tài khoản | Không đọc nguồn chưa che; tầng 1 dùng HMAC có khóa; label chỉ từ dữ liệu đã che; không log payload. |
+| Lộ số tài khoản | Số tài khoản gốc chỉ tồn tại trong hàm nhận thông báo; chỉ HMAC có khóa riêng + 4 số cuối được lưu; khóa HMAC tách khỏi `WEBHOOK_SECRET`; không log payload. |
 | Client giả identity để "dạy" sai | Đường học không nhận identity từ client; server suy từ giao dịch đã lưu. Lệnh SET chỉ nhận khóa đúng định dạng và danh mục trong registry. |
 | Formula injection | Ghi literal `stringValue` qua `appendCells` (không USER_ENTERED). |
 | Payload lớn/sai | Giới hạn 2 KiB, allowlist khóa, regex khóa ≤ 200 ký tự → 400/413 trước khi tạo client Sheets. |
@@ -156,6 +158,8 @@ Rule trả về: `key, identityType, label, type, category, count, total, confid
 `npm run audit:prepare -- --scope category-memory` (dry-run, chỉ đọc) → `CHANGES_REQUIRED|ALREADY_READY`.
 Apply (chỉ chủ dự án): `-- --scope category-memory --apply --backup <file ngoài repo>`: backup đầy đủ, kiểm nguồn không đổi, thêm tab + header trong một batch, đọc lại. Không sửa/xóa tab khác, không rewrite lịch sử. Rollback `--rollback` chỉ khi tab rỗng và không có marker. Không có tab: GET vẫn chạy (không lệnh nào), POST trả `MIGRATION_REQUIRED`.
 
+Tầng 1: `npm run audit:prepare -- --scope transaction-identity` (dry-run) rồi apply tương tự cho tab `Transaction_Identity` (`event_id, identity_key, label, created_at`), sau đó đặt `CATEGORY_MEMORY_HMAC_KEY` (Sensitive) và redeploy. Thứ tự này đảm bảo không có lúc nào định danh được ghi mà tab chưa sẵn sàng; thiếu một trong hai thì chỉ bỏ qua tầng 1.
+
 ## 12. Rollout
 
 1. Merge sau PR #7 (phụ thuộc `Transaction_Edits`, `MutationQueue`).
@@ -163,4 +167,4 @@ Apply (chỉ chủ dự án): `-- --scope category-memory --apply --backup <file
 3. Chạy migration dry-run → apply trên Sheet thử, bật `CATEGORY_MEMORY_WRITES_ENABLED=1`, thử sửa/xóa/đặt lại.
 4. Production chỉ khi chủ dự án nghiệm thu riêng. Tắt flag là rollback hoàn toàn (không có dữ liệu suy ra nào cần dọn).
 
-Nâng cấp sau (không làm trong v1): nguồn tầng 1 khi có envelope xác nhận; overlay lạc quan khi offline; tùy chọn học từ lịch sử Money Lover chưa sửa.
+Nâng cấp sau (không làm trong v1): mẫu tầng 1 ngoài `CT tu … toi …` khi có envelope xác nhận; overlay lạc quan khi offline; tùy chọn học từ lịch sử Money Lover chưa sửa.

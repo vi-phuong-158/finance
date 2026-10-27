@@ -36,7 +36,8 @@ object CategoryMemory {
     const val UNCATEGORIZED = "Chưa phân loại"
     // Twin of vercel/lib/category-memory.ts TECHNICAL_TOKENS; shared/category-memory-vectors.tsv covers both.
     private val technical = setOf("MBVCB", "IBFT", "REF", "TRACE", "FT", "QR", "POS", "ECOM", "NAPAS", "CT", "CK", "GD", "TK", "ND", "VND", "DEN")
-    private val key = Regex("^(?:ACCOUNT:(?:VCB|BIDV|VIETINBANK):[a-f0-9]{32}|(?:COUNTERPARTY|DESCRIPTION):[A-Z0-9]+(?: [A-Z0-9]+){0,7})$")
+    // Twin of vercel/lib/category-memory.ts IDENTITY_KEY. ACCOUNT is a keyed HMAC of the account only (no bank).
+    private val key = Regex("^(?:ACCOUNT:[a-f0-9]{32}|(?:COUNTERPARTY|DESCRIPTION):[A-Z0-9]+(?: [A-Z0-9]+){0,7})$")
     private val levels = setOf("HINT", "AMBIGUOUS", "PRESELECT", "STRONG")
 
     fun normalize(text: String): String {
