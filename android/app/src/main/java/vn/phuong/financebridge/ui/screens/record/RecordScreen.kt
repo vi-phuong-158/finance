@@ -79,6 +79,7 @@ fun RecordScreen(
     val memoryRepository = remember(context) { CategoryMemoryRepository(context) }
     var memory by remember { mutableStateOf<CategoryMemoryIndex?>(null) }
     var categoryPicked by remember { mutableStateOf(false) }
+    var autoPicked by remember { mutableStateOf<String?>(null) }
     var hiddenKey by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         memory = memoryRepository.cached()
@@ -107,12 +108,15 @@ fun RecordScreen(
     )
 
     val accounts = listOf("Vietcombank", "VietinBank", "BIDV", "Tiền mặt")
-    LaunchedEffect(selectedType) { selectedCategory = categories.first().name; categoryPicked = false }
+    LaunchedEffect(selectedType) { selectedCategory = categories.first().name; categoryPicked = false; autoPicked = null }
     // Manual entries have no counterparty, so the note is the (Tier 3) identity.
     val noteKey = CategoryMemory.descriptionKey(description)
     val suggestion = CategoryMemory.suggest(memory, noteKey, if (selectedType == ExtendedTransactionType.THU) "THU" else "CHI")
         ?.takeIf { noteKey != hiddenKey }
-    LaunchedEffect(suggestion?.rule) { selectedCategory = CategoryMemory.preselectForRecord(suggestion, categoryPicked, selectedCategory) }
+    LaunchedEffect(suggestion?.rule) {
+        val (category, auto) = CategoryMemory.preselectForRecord(suggestion, categoryPicked, selectedCategory, autoPicked, categories.first().name)
+        selectedCategory = category; autoPicked = auto
+    }
 
     Column(
         modifier = modifier
