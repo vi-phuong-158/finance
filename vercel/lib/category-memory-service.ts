@@ -3,7 +3,7 @@ import { configurationIsValid, readGoogleConfiguration } from './configuration.j
 import type { Environment, GoogleConfiguration } from './configuration.js';
 import type { FinanceSnapshot } from './unified-transactions.js';
 import { atomicAppendRequests, guardedAppend } from './atomic-append.js';
-import { buildMemoryIndex, memoryIdentityKey, memoryObservations, MEMORY_HEADERS, MEMORY_WINDOW, readMemoryCommands, validCommand } from './category-memory.js';
+import { buildMemoryIndex, memoryObservations, MEMORY_HEADERS, MEMORY_WINDOW, readMemoryCommands, validCommand } from './category-memory.js';
 import type { MemoryCommand } from './category-memory.js';
 import { hasExpectedHeaders } from './sheet-schema.js';
 import { CATEGORY_REGISTRY } from './categories.js';
@@ -32,7 +32,7 @@ export async function handleCategoryMemoryRequest(request: MemoryRequest, env: E
     try {
       const port = await makePort(readGoogleConfiguration(env)!, false);
       const [snapshot, rows] = await Promise.all([port.readFinance(), port.readCommands()]);
-      const rules = buildMemoryIndex(memoryObservations(snapshot, memoryIdentityKey(env.WEBHOOK_SECRET!)), readMemoryCommands(rows));
+      const rules = buildMemoryIndex(memoryObservations(snapshot), readMemoryCommands(rows));
       return { httpStatus: 200, body: { version: 1, enabled: true, writesEnabled: writesEnabled && rows !== null,
         generatedAt: now.toISOString(), window: MEMORY_WINDOW, rules,
         categories: CATEGORY_REGISTRY.filter((c) => c.active && c.name !== 'Chưa phân loại').map((c) => ({ name: c.name, type: c.type })) } as Record<string, unknown> };

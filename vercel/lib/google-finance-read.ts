@@ -32,11 +32,20 @@ export async function makeGoogleFinanceReadPort(config: GoogleConfiguration): Pr
       const last = editSheet.gridProperties.columnCount === 8 ? 'H' : 'I';
       ranges.push(`'Transaction_Edits'!A1:${last}${editSheet.gridProperties.rowCount}`);
     }
+    const identitySheet = metadata.data.sheets?.find((s) => s.properties?.title === 'Transaction_Identity')?.properties;
+    if (identitySheet) {
+      if (identitySheet.sheetType !== 'GRID' || (identitySheet.gridProperties?.columnCount ?? 0) < 4 || !identitySheet.gridProperties?.rowCount
+        || identitySheet.gridProperties.rowCount > 50001) throw new Error('FINANCE_SCHEMA_MISMATCH');
+      // One extra column when present so stray data beside the identities fails closed.
+      ranges.push(`'Transaction_Identity'!A1:${identitySheet.gridProperties.columnCount === 4 ? 'D' : 'E'}${identitySheet.gridProperties.rowCount}`);
+    }
     const response = await sheets.spreadsheets.values.batchGet({ spreadsheetId: config.spreadsheetId,
       ranges, valueRenderOption: 'UNFORMATTED_VALUE' });
-    const [bank, history, edits] = (response.data.valueRanges ?? []).map((range) => range.values ?? []);
-    if (!bank || !history) throw new Error('FINANCE_SCHEMA_MISMATCH');
+    const values = (response.data.valueRanges ?? []).map((range) => range.values ?? []);
+    const [bank, history] = values;
+    const edits = editSheet ? values[2] : undefined, identities = identitySheet ? values[editSheet ? 3 : 2] : undefined;
+    if (!bank || !history || (editSheet && !edits) || (identitySheet && !identities)) throw new Error('FINANCE_SCHEMA_MISMATCH');
     if (bank.length > 50001 || history.length > 50001) throw new Error('FINANCE_SOURCE_LIMIT_EXCEEDED');
-    return { bank, history, ...(editSheet ? { edits } : {}) };
+    return { bank, history, ...(editSheet ? { edits } : {}), ...(identitySheet ? { identities } : {}) };
   } };
 }

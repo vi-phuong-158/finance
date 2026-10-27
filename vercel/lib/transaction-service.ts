@@ -7,6 +7,7 @@ import { parseVcb } from '../parsers/vcb.js';
 import { parseVietinbank } from '../parsers/vietinbank.js';
 import { timingSafeEqual } from 'node:crypto';
 import { configurationIsValid, readGoogleConfiguration } from './configuration.js';
+import { accountIdentity, accountIdentityKey } from './category-memory.js';
 import { hasExpectedHeaders, hasTransactionHeaders, TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
 export { TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
 
@@ -20,7 +21,8 @@ type Environment = Record<string, string | undefined>;
 type SheetsPort = {
   readEventIds: () => Promise<{ transactionIds: unknown[]; rawIds: unknown[] }>;
   readHeaders: () => Promise<{ transaction: unknown[]; raw: unknown[] }>;
-  appendTransaction: (row: unknown[]) => Promise<void | 'APPENDED' | 'DUPLICATE'>;
+  // identity: Transaction_Identity row, written atomically with the transaction when that tab exists.
+  appendTransaction: (row: unknown[], identity?: unknown[] | null) => Promise<void | 'APPENDED' | 'DUPLICATE'>;
   appendRaw: (row: unknown[]) => Promise<void | 'APPENDED' | 'DUPLICATE'>;
 };
 type SheetsPortFactory = (config: { spreadsheetId: string; clientEmail: string; privateKey: string }) => Promise<SheetsPort>;
@@ -165,6 +167,9 @@ async function validateAndProcessTransactionInternal(
 
     if (parsed) {
       const category = matchCategory(`${parsed.counterparty} ${parsed.description}`, parsed.type);
+      // Only here is the counterparty account still unmasked; only its keyed HMAC leaves this function.
+      const hmacKey = accountIdentityKey(env);
+      const account = hmacKey ? accountIdentity(normalizedText, parsed.type, hmacKey) : null;
       const saved = await sheets.appendTransaction([
         parsed.time,
         bank,
@@ -175,7 +180,7 @@ async function validateAndProcessTransactionInternal(
         maskSensitiveIdentifiers(parsed.description),
         category,
         eventId,
-      ]);
+      ], account ? [eventId, account.key, account.label, new Date().toISOString()] : null);
 
       return { httpStatus: 200, body: { status: saved === 'DUPLICATE' ? 'DUPLICATE_IGNORED' : 'SAVED_TRANSACTION', eventId } };
     }

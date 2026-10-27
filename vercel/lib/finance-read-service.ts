@@ -6,7 +6,7 @@ import type { FinanceReadPort } from './unified-transactions.js';
 import { filterTransactions, paginateTransactions, parseFinanceQuery } from './finance-query.js';
 import { buildDashboard } from './dashboard-service.js';
 import { CATEGORY_REGISTRY } from './categories.js';
-import { memoryIdentityKey, originalIdentities } from './category-memory.js';
+import { originalIdentities } from './category-memory.js';
 
 export type ReadRequest = { method?: string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, unknown> };
 export async function readFinance(request: ReadRequest, env: Environment,
@@ -27,7 +27,7 @@ export async function readFinance(request: ReadRequest, env: Environment,
     const page = paginateTransactions(rows, query, env.WEBHOOK_SECRET!);
     if (env.CATEGORY_MEMORY_ENABLED === '1') {
       // Lets the app look up its offline cache without re-deriving identity from edited fields.
-      const identities = originalIdentities(snapshot, memoryIdentityKey(env.WEBHOOK_SECRET!));
+      const identities = originalIdentities(snapshot);
       page.transactions = page.transactions.map((t) => ({ ...t, memoryKey: identities.get(t.id)?.key ?? null }));
     }
     return { httpStatus: 200, body: { ...page, lastUpdatedAt: now.toISOString(),

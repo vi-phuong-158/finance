@@ -104,6 +104,9 @@ class CategoryMemoryTest {
         MemoryCommand(id, "SET", party, "CHI", "Gia đình").validate(index())
         MemoryCommand(id, "DELETE", party, "CHI").validate(index())
         MemoryCommand(id, "RESET_ALL").validate(index())
+        // Same key format as the server: keyed account digest only, no bank segment.
+        assertTrue(CategoryMemory.validKey("ACCOUNT:${"a".repeat(32)}"))
+        assertFalse(CategoryMemory.validKey("ACCOUNT:VCB:${"a".repeat(32)}"))
         listOf(MemoryCommand(id, "SET", party, "CHI", "Lương"), MemoryCommand(id, "SET", party, "CHI", "Chưa phân loại"),
             MemoryCommand(id, "SET", "ACCOUNT:VCB:0123456789", "CHI", "Gia đình"), MemoryCommand(id, "DELETE", party, "BOTH"),
             MemoryCommand(id, "RESET_ALL", party), MemoryCommand("bad", "RESET_ALL"), MemoryCommand(id, "DROP"))
