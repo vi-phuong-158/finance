@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vn.phuong.financebridge.ui.components.*
 import vn.phuong.financebridge.ui.data.FinanceApi
 import vn.phuong.financebridge.ui.data.parseTransaction
@@ -48,6 +49,8 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
     var categories by remember { mutableStateOf<List<CategoryChoice>>(emptyList()) }
     var editingEnabled by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<UiTransaction?>(null) }
+    var opening by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var savedMessage by remember { mutableStateOf<String?>(null) }
     val memoryRepository = remember(context) { CategoryMemoryRepository(context) }
     var memory by remember { mutableStateOf<CategoryMemoryIndex?>(null) }
@@ -154,7 +157,16 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
                     if (!editingEnabled) Text("Chưa mở chỉnh sửa trên máy chủ.", style = FinanceTheme.typography.caption)
                 }
             }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Đóng") } },
-            dismissButton = { if (editingEnabled) TextButton(onClick = { editing = transaction; selected = null }) { Text("Sửa") } })
+            dismissButton = { if (editingEnabled) TextButton(enabled = !opening, onClick = {
+                scope.launch {
+                    opening = true
+                    when (val start = prepareEdit(context, api, transaction)) {
+                        is EditStart.Ready -> { start.categories?.let { categories = it }; editing = start.transaction }
+                        is EditStart.Refused -> savedMessage = start.message
+                    }
+                    selected = null; opening = false
+                }
+            }) { Text(if (opening) "Đang tải…" else "Sửa") } })
     }
     editing?.let { transaction ->
         TransactionEditForm(context, transaction, categories, memory, onDismiss = { editing = null }, onQueued = {

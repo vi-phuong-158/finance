@@ -22,6 +22,7 @@ import androidx.compose.ui.window.Dialog
 import vn.phuong.financebridge.ui.components.FinanceCard
 import vn.phuong.financebridge.ui.components.SecondaryButton
 import vn.phuong.financebridge.ui.screens.memory.CategoryMemoryScreen
+import vn.phuong.financebridge.ui.screens.pending.PendingChangesScreen
 import vn.phuong.financebridge.ui.screens.settings.SettingsScreen
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -32,7 +33,37 @@ fun MoreScreen(
 ) {
     var showSystemSettings by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
+    var showPending by remember { mutableStateOf(false) }
     var activeDialog by remember { mutableStateOf<String?>(null) }
+
+    if (showPending) {
+        Column(modifier = modifier.fillMaxSize().background(FinanceTheme.colors.background)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPending = false }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Quay lại",
+                    tint = FinanceTheme.colors.primary,
+                )
+                Text(
+                    text = "Khác",
+                    style = FinanceTheme.typography.titleMedium,
+                    color = FinanceTheme.colors.primary,
+                )
+            }
+            PendingChangesScreen(
+                context = context,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        return
+    }
 
     if (showMemory) {
         Column(modifier = modifier.fillMaxSize().background(FinanceTheme.colors.background)) {
@@ -138,6 +169,23 @@ fun MoreScreen(
                 iconBg = FinanceTheme.colors.income.copy(alpha = 0.12f),
                 title = "Trạng thái đồng bộ",
                 subtitle = "Theo dõi tiến độ gửi giao dịch tự động lên sổ",
+            )
+        }
+
+        // 2b. Thay đổi cần xử lý
+        FinanceCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showPending = true },
+            shape = FinanceTheme.shapes.xLarge,
+            contentPadding = 18.dp,
+        ) {
+            MoreRow(
+                icon = Icons.Rounded.ErrorOutline,
+                iconTint = FinanceTheme.colors.expense,
+                iconBg = FinanceTheme.colors.expense.copy(alpha = 0.12f),
+                title = "Thay đổi cần xử lý",
+                subtitle = "Gửi lại, đối chiếu hoặc bỏ thay đổi chưa đồng bộ được",
             )
         }
 

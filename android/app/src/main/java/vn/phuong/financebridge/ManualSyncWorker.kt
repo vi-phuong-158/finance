@@ -20,22 +20,24 @@ class ManualSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 .followRedirects(false).followSslRedirects(false).build()
             for ((id, payload, endpoint) in outbox.pending()) {
                 if (endpoint !in setOf("manual-transaction", "loan-event", "transaction-edit", "category-memory")) {
-                    outbox.update(id, "BLOCKED")
+                    outbox.update(id, "BLOCKED", "ENDPOINT_NOT_ALLOWED")
                     continue
                 }
                 if (!WebhookConfiguration.isValid(BuildConfig.WEBHOOK_URL, secret)) {
-                    outbox.update(id, "BLOCKED")
+                    outbox.update(id, "BLOCKED", "CONNECTION_NOT_CONFIGURED")
                     continue
                 }
                 outbox.update(id, "SYNCING")
                 try {
                     val request = Request.Builder().url(BuildConfig.WEBHOOK_URL.removeSuffix("/api/transaction") + "/api/$endpoint")
                         .header("X-Webhook-Secret", secret).post(payload.toRequestBody("application/json".toMediaType())).build()
-                    val state = client.newCall(request).execute().use { response ->
+                    val (state, error) = client.newCall(request).execute().use { response ->
                         val json = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
-                        manualSyncState(response.code, json?.optString("status")?.takeIf { it.isNotEmpty() } ?: json?.optString("error"))
+                        val error = json?.optString("error")?.takeIf { it.isNotEmpty() }
+                        manualSyncState(response.code, json?.optString("status")?.takeIf { it.isNotEmpty() } ?: error) to
+                            manualSyncErrorCode(response.code, error)
                     }
-                    outbox.update(id, state)
+                    outbox.update(id, state, if (state == "BLOCKED") error else null)
                     if (state == "PENDING") return@withContext Result.retry()
                 } catch (e: CancellationException) {
                     throw e

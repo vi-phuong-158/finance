@@ -51,7 +51,7 @@ VCB Notification
            └─ Sai secret (401 UNAUTHORIZED) / lỗi cấu hình: đánh dấu STATE_BLOCKED, giữ nguyên payload
 ```
 
-Khi người dùng sửa mã kết nối trong UI, họ có thể nhấn nút **Gửi lại X giao dịch lỗi** để chuyển các bản ghi `BLOCKED` về `PENDING` và WorkManager sẽ tiếp tục gửi mà không bị mất dữ liệu hay trùng lặp.
+Khi người dùng sửa mã kết nối trong UI, họ có thể nhấn nút **Gửi lại X giao dịch lỗi** để chuyển các bản ghi `BLOCKED` về `PENDING` và WorkManager sẽ tiếp tục gửi mà không bị mất dữ liệu hay trùng lặp. Với hàng đợi ghi tay/sửa giao dịch, nút này chỉ gửi lại các lỗi gửi lại được (như mã kết nối sai); xung đột sửa và yêu cầu bị từ chối vĩnh viễn được xử lý ở Khác → Thay đổi cần xử lý (xem `finance-v1/SCHEMA_AND_OPERATIONS.md`).
 
 ## 5. Trải nghiệm người dùng (UX)
 

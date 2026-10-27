@@ -68,6 +68,8 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // Test-only: runs the real SQLite queue (schema upgrades, atomic edit replacement) on the JVM.
+    testImplementation("org.robolectric:robolectric:4.12.2")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")

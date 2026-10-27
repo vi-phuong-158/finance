@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import vn.phuong.financebridge.BuildConfig
+import vn.phuong.financebridge.CategoryChoice
 import vn.phuong.financebridge.CategoryMemory
 import vn.phuong.financebridge.WebhookConfiguration
 import vn.phuong.financebridge.WebhookCredentialStore
@@ -53,6 +54,18 @@ class FinanceApi(context: Context) {
                 Result.failure(IllegalStateException("Không tải được dữ liệu. Kiểm tra kết nối và thử lại."))
             }
         }
+}
+
+data class TransactionLookup(val transaction: UiTransaction?, val categories: List<CategoryChoice>, val editingEnabled: Boolean)
+
+// The latest server state of one transaction, so an edit is always based on its current revision.
+suspend fun FinanceApi.latestTransaction(id: String): Result<TransactionLookup> = read("transactions", mapOf("id" to id, "limit" to "1")) { json ->
+    val values = json.getJSONArray("transactions")
+    val choices = json.optJSONArray("categories")
+    val found = (0 until values.length()).map { parseTransaction(values.getJSONObject(it)) }.firstOrNull { it.id == id }
+    TransactionLookup(found, if (choices == null) emptyList() else (0 until choices.length()).map {
+        val choice = choices.getJSONObject(it); CategoryChoice(choice.getString("name"), choice.getString("type"))
+    }, json.optBoolean("editingEnabled", false))
 }
 
 fun parseTransaction(item: JSONObject): UiTransaction {
