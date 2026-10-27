@@ -18,6 +18,16 @@ val webhookUrl = providers.environmentVariable("WEBHOOK_URL").orNull
     ?: localProps.getProperty("WEBHOOK_URL")
     ?: defaultWebhookUrl
 
+// Release signing comes only from the environment (CI secrets or the owner's shell), never from the repo.
+// A stable key is what lets Android install a new APK over the old one without wiping the queued data.
+val releaseSigningEnv = listOf("ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
+    .associateWith { providers.environmentVariable(it).orNull?.takeIf(String::isNotBlank) }
+
+// Every distributed build needs a higher versionCode than the installed one, or Android refuses the update.
+val appVersionCode = providers.gradleProperty("versionCode").orNull?.let {
+    it.toIntOrNull()?.takeIf { code -> code in 1..2_100_000_000 } ?: throw GradleException("versionCode must be an integer in 1..2100000000.")
+} ?: 1
+
 fun javaLiteral(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n") + "\""
 
 fun validWebhookEndpoint(endpoint: String): Boolean {
@@ -34,14 +44,24 @@ android {
         applicationId = "vn.phuong.financebridge"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = "1.0 ($appVersionCode)"
 
         buildConfigField("String", "WEBHOOK_URL", javaLiteral(webhookUrl))
     }
 
+    signingConfigs {
+        create("release") {
+            releaseSigningEnv["ANDROID_KEYSTORE_PATH"]?.let { storeFile = file(it) }
+            storePassword = releaseSigningEnv["ANDROID_KEYSTORE_PASSWORD"]
+            keyAlias = releaseSigningEnv["ANDROID_KEY_ALIAS"]
+            keyPassword = releaseSigningEnv["ANDROID_KEY_PASSWORD"]
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -101,19 +121,31 @@ tasks.register("verifyWebhookConfigurationPolicy") {
             "https://finance.example.invalid/api/other",
         ).forEach { url -> check(!validWebhookEndpoint(url)) }
 
-        val buildConfigFile = project.layout.buildDirectory.file("generated/source/buildConfig/debug/vn/phuong/financebridge/BuildConfig.java").get().asFile
-        if (buildConfigFile.exists()) {
-            val content = buildConfigFile.readText()
-            check(!content.contains("WEBHOOK_SECRET")) {
-                "SECURITY VIOLATION: BuildConfig contains WEBHOOK_SECRET"
+        listOf("debug", "release").forEach { variant ->
+            val buildConfigFile = project.layout.buildDirectory.file("generated/source/buildConfig/$variant/vn/phuong/financebridge/BuildConfig.java").get().asFile
+            if (buildConfigFile.exists()) {
+                val content = buildConfigFile.readText()
+                check(!content.contains("WEBHOOK_SECRET")) {
+                    "SECURITY VIOLATION: BuildConfig contains WEBHOOK_SECRET"
+                }
             }
         }
         println("Webhook build policy: 7 checks passed")
     }
 }
 
+// Fails before any release packaging instead of letting AGP emit an unsigned or wrongly signed APK.
+// Only names are reported; values never reach the log.
+val validateReleaseSigning = tasks.register("validateReleaseSigning") {
+    doLast {
+        val missing = releaseSigningEnv.filterValues { it == null }.keys
+        if (missing.isNotEmpty()) throw GradleException("Release signing requires ${missing.joinToString()}.")
+        if (!file(releaseSigningEnv.getValue("ANDROID_KEYSTORE_PATH")!!).isFile) throw GradleException("ANDROID_KEYSTORE_PATH does not point to a file.")
+    }
+}
+
 tasks.configureEach {
     if (name == "preReleaseBuild" || name.startsWith("bundleRelease")) {
-        dependsOn(validateReleaseWebhookConfig)
+        dependsOn(validateReleaseWebhookConfig, validateReleaseSigning)
     }
 }
