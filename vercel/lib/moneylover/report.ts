@@ -67,3 +67,21 @@ export function reconcileSource(parsed: ParseResult, expected: ReconciliationExp
   return { matches: parsed.rejected.length === 0 && checks.every((c) => c.actual === c.expected),
     checks: checks.map((c) => ({ ...c, difference: c.actual - c.expected })) };
 }
+
+// The CLI never serializes the private source summary, row details, names or monetary checks.
+export function publicImportReport(report: Record<string, any>) {
+  const summary = report.summary ?? {}, reconciliation = report.reconciliation ?? {};
+  const pick = (value: Record<string, any>, keys: string[]) => Object.fromEntries(keys.filter((k) => value[k] !== undefined).map((k) => [k, value[k]]));
+  return { ...pick(report, ['mode', 'status', 'warnings']),
+    summary: { ...pick(summary, ['rows', 'sourceRows', 'accepted', 'incomeCount', 'expenseCount', 'excludedCount',
+      'excludedFromReportCount', 'identicalRowsPreserved', 'excludedByReason']),
+      rejectedCount: summary.rejected?.length ?? 0 } as Record<string, any>,
+    reconciliation: { matches: reconciliation.matches ?? null,
+      status: reconciliation.status ?? (reconciliation.matches ? 'MATCHED' : 'MISMATCH'),
+      checkedCount: reconciliation.checks?.length ?? 0,
+      failedCount: reconciliation.checks?.filter((c: { expected: number; actual: number }) => c.expected !== c.actual).length ?? 0 },
+    ...(report.import ? { import: { ...pick(report.import, ['inserted', 'pending', 'skipped', 'rejected', 'create', 'status', 'duplicateCheck']),
+      ...(report.import.overlap ? { overlap: pick(report.import.overlap, ['candidateHistoryCount', 'candidateTransactionCount',
+        'reviewedCount', 'excludedHistoryCount', 'unresolvedCount', 'status']) } : {}) } } : {}),
+    ...(report.cleanup ? { cleanup: pick(report.cleanup, ['totalBefore', 'removedCount', 'remainingCount', 'status']) } : {}) };
+}

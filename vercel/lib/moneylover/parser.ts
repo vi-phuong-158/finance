@@ -1,11 +1,12 @@
 import { canonicalContent, legacyIdentity } from './identity.js';
-import { minorUnits, parseBoolean, validDate } from './schema.js';
+import { maskHistoryText, minorUnits, parseBoolean, validDate } from './schema.js';
 import type { MoneyLoverTransaction } from './schema.js';
 import { isNonConsumptionCategory } from '../categories.js';
+import { isSavingsWallet } from './history-reader.js';
 
 export type SourceRow = { rowNumber: number; cells: unknown[] };
 export type SourceTable = { rows: SourceRow[]; date1904?: boolean };
-export type ExclusionReason = 'CURRENCY_NOT_VND' | 'NON_CONSUMPTION_CATEGORY';
+export type ExclusionReason = 'CURRENCY_NOT_VND' | 'NON_CONSUMPTION_CATEGORY' | 'SAVINGS_WALLET';
 export type ExcludedRow = {
   row: number;
   reason: ExclusionReason;
@@ -108,6 +109,11 @@ export function parseMoneyLover(table: SourceTable): ParseResult {
         continue;
       }
 
+      if (isSavingsWallet(wallet)) {
+        result.excluded.push({ row: row.rowNumber, reason: 'SAVINGS_WALLET', category, currency, wallet, amount: signed });
+        continue;
+      }
+
       const t: Omit<MoneyLoverTransaction, 'legacyId'> = {
         date: sourceDate(cell('date'), table.date1904 ?? false), type: signed < 0 ? 'CHI' : 'THU',
         amount: Math.abs(signed), currency: 'VND', amountVnd: Math.abs(signed),
@@ -119,7 +125,8 @@ export function parseMoneyLover(table: SourceTable): ParseResult {
       const content = canonicalContent(t), occurrence = (occurrences.get(content) ?? 0) + 1;
       occurrences.set(content, occurrence);
       if (occurrence > 1) result.identicalRows++;
-      result.transactions.push({ legacyId: legacyIdentity(content, occurrence), ...t });
+      // Identity remains based on the original content; redaction must not re-key old exports.
+      result.transactions.push(maskHistoryText({ legacyId: legacyIdentity(content, occurrence), ...t }));
     } catch (error) {
       result.rejected.push({ row: row.rowNumber, code: (error as Error).message });
     }

@@ -1,8 +1,8 @@
 import { hasExpectedHeaders, hasTransactionHeaders } from './sheet-schema.js';
 import { canonicalBankCategory, CATEGORY_REGISTRY } from './categories.js';
 import { EDIT_HEADERS } from './edit-schema.js';
-import { HISTORY_HEADERS, minorUnits, validDate } from './moneylover/schema.js';
-import { isExcludedHistoryRow, readHistoryRow } from './moneylover/history-reader.js';
+import { HISTORY_HEADERS, maskHistoryText, minorUnits, validDate } from './moneylover/schema.js';
+import { isExcludedHistoryRow, isSavingsWallet, readHistoryRow } from './moneylover/history-reader.js';
 import type { Bank } from './transaction-service.js';
 
 export type UnifiedTransaction = {
@@ -27,7 +27,7 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransacti
   };
   const populated = (row: unknown[]) => row.some((v) => v !== '' && v !== null && v !== undefined);
   for (const row of snapshot.history.slice(1).filter(populated)) {
-    const t = readHistoryRow(row);
+    const t = maskHistoryText(readHistoryRow(row));
     if (isExcludedHistoryRow(t)) continue;
     rows.push({ id: `moneylover:${t.legacyId}`, date: t.date, time: null, datePrecision: 'DAY', type: t.type,
       amount: t.amount, currency: 'VND', category: t.category, originalCategory: t.category,
@@ -70,20 +70,22 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransacti
       target.type = type; target.excludedFromReport = excluded || category === 'Chuyển nội bộ';
     }
   }
+  // Validate edit chains before hiding a savings record, so its edits are not orphaned.
+  const visibleRows = rows.filter((t) => t.source !== 'MONEYLOVER' || !isSavingsWallet(t.accountOrWallet ?? ''));
   const groups = new Map<string, { bank: number; history: number }>();
   const key = (t: UnifiedTransaction) => `${t.date}|${t.type}|${t.amount}`;
-  for (const t of rows) {
-    if (t.source === 'MANUAL') continue;
+  for (const t of visibleRows) {
+    if (t.source === 'MANUAL' || t.excludedFromReport) continue;
     const group = groups.get(key(t)) ?? { bank: 0, history: 0 };
     group[t.source === 'MONEYLOVER' ? 'history' : 'bank']++;
     groups.set(key(t), group);
   }
-  for (const t of rows) {
-    if (t.source === 'MANUAL') continue;
+  for (const t of visibleRows) {
+    if (t.source === 'MANUAL' || t.excludedFromReport) continue;
     const group = groups.get(key(t));
     t.possibleDuplicateCount = group ? group[t.source === 'MONEYLOVER' ? 'bank' : 'history'] : 0;
     t.possibleDuplicate = t.possibleDuplicateCount > 0;
   }
-  return rows.sort((a, b) => transactionKey(a) < transactionKey(b) ? 1 : transactionKey(a) > transactionKey(b) ? -1 : 0);
+  return visibleRows.sort((a, b) => transactionKey(a) < transactionKey(b) ? 1 : transactionKey(a) > transactionKey(b) ? -1 : 0);
 }
 export function transactionKey(t: UnifiedTransaction): string { return `${t.date}|${t.time ?? ''}|${t.id}`; }
