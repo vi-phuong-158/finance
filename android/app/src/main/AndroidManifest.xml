@@ -8,7 +8,9 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:fullBackupOnly="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="Đồng Bộ Thu Chi"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
