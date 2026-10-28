@@ -1,6 +1,7 @@
 import type { GoogleConfiguration } from '../configuration.js';
 import type { ImportPort } from './importer.js';
 import { HISTORY_HEADERS, HISTORY_TAB } from './schema.js';
+import { financeReadRanges } from '../google-finance-read.js';
 
 export function historyAppendRequests(rows: unknown[][], sheetId: number, create: boolean) {
   const values = (create ? [HISTORY_HEADERS, ...rows] : rows).map((row) => ({ values: row.map((v) => ({
@@ -28,17 +29,27 @@ export function historyReplaceRequests(rows: unknown[][], sheetId: number) {
   ];
 }
 
-export async function makeHistoryImportPort(config: GoogleConfiguration, customSheets?: unknown): Promise<ImportPort> {
+export async function makeHistoryImportPort(config: GoogleConfiguration, customSheets?: unknown, write = false): Promise<ImportPort> {
   const sheets = (customSheets as any) ?? await (async () => {
     const { google } = await import('googleapis');
     const auth = new google.auth.GoogleAuth({ credentials: { client_email: config.clientEmail, private_key: config.privateKey },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
+      scopes: [write ? 'https://www.googleapis.com/auth/spreadsheets' : 'https://www.googleapis.com/auth/spreadsheets.readonly'] });
     return google.sheets({ version: 'v4', auth });
   })();
   const spreadsheetId = config.spreadsheetId;
   let sheetId: number | undefined;
   let availableSheetId = 1;
   return {
+    async readTransactions() {
+      const meta = await sheets.spreadsheets.get({ spreadsheetId,
+        fields: 'sheets(properties(title,sheetType,gridProperties(rowCount,columnCount)))' });
+      const tabs = (meta.data.sheets ?? []).map((s: any) => ({ title: s.properties?.title ?? '', type: s.properties?.sheetType ?? '',
+        rows: s.properties?.gridProperties?.rowCount ?? 0, columns: s.properties?.gridProperties?.columnCount ?? 0 }));
+      const [range] = financeReadRanges([...tabs.filter((t: any) => t.title !== HISTORY_TAB),
+        { title: HISTORY_TAB, type: 'GRID', rows: 1, columns: HISTORY_HEADERS.length }]);
+      const data = await sheets.spreadsheets.values.get({ spreadsheetId, range, valueRenderOption: 'UNFORMATTED_VALUE' });
+      return data.data.values ?? [];
+    },
     async readHistory() {
       const meta = await sheets.spreadsheets.get({ spreadsheetId,
         fields: 'sheets(properties(sheetId,title,sheetType,gridProperties(rowCount,columnCount)))' });
@@ -57,12 +68,14 @@ export async function makeHistoryImportPort(config: GoogleConfiguration, customS
       return { exists: true, headers: rows[0] ?? [], rows: rows.slice(1) };
     },
     async appendHistory(rows, create) {
+      if (!write) throw new Error('HISTORY_WRITE_DISABLED');
       if (create) sheetId = availableSheetId;
       if (sheetId === undefined) throw new Error('HISTORY_SCHEMA_MISMATCH');
       await sheets.spreadsheets.batchUpdate({ spreadsheetId,
         requestBody: { requests: historyAppendRequests(rows, sheetId, create) } }, { retry: false });
     },
     async replaceHistory(rows) {
+      if (!write) throw new Error('HISTORY_WRITE_DISABLED');
       if (sheetId === undefined) throw new Error('HISTORY_SCHEMA_MISMATCH');
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId,

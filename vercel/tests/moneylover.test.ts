@@ -15,6 +15,7 @@ import { summarizeSource, reconcileSource } from '../lib/moneylover/report.js';
 import { sourceRow, sourceTable } from './moneylover-fixtures.js';
 import { testEnvironment } from './support.js';
 import { readGoogleConfiguration } from '../lib/configuration.js';
+import { TRANSACTION_HEADERS } from '../lib/sheet-schema.js';
 
 test('Money Lover signed amounts, date-only VND and source fields survive normalization; non-VND is excluded', () => {
   const result = parseMoneyLover(sourceTable(sourceRow(), sourceRow({ 3: 600000, 4: 'JPY' })));
@@ -49,6 +50,13 @@ test('Money Lover non-consumption categories (Cho vay, Trả lãi, Vay, Trả n�
   assert.equal(result.excluded.every((e) => e.reason === 'NON_CONSUMPTION_CATEGORY'), true);
   assert.equal(result.transactions.length, 3);
   assert.deepEqual(result.transactions.map((t) => t.category), ['Lương', 'Thu nhập khác', 'Tiền chuyển đến']);
+});
+test('savings wallet is excluded from imports, even for ordinary income and expense categories', () => {
+  const result = parseMoneyLover(sourceTable(sourceRow({ 5: 'Tiết Kiệm', 2: 'Lương', 3: 25000 }),
+    sourceRow({ 5: '  TIET KIEM  ', 2: 'Cafe' }), sourceRow({ 5: 'Tiền mặt', 2: 'Cafe' })));
+  assert.deepEqual(result.excluded.map((r) => r.reason), ['SAVINGS_WALLET', 'SAVINGS_WALLET']);
+  assert.equal(result.transactions.length, 1);
+  assert.equal(summarizeSource(result).excludedByReason.SAVINGS_WALLET, 2);
 });
 test('blank optional fields are preserved and exclusion flags have an explicit allowlist', () => {
   const t = parseMoneyLover(sourceTable(sourceRow({ 6: '', 7: null, 8: undefined, 9: '' }))).transactions[0];
@@ -87,6 +95,7 @@ function memoryPort(): { port: ImportPort; snapshot: HistorySnapshot; writes: nu
   const state = { snapshot: { exists: false, headers: [], rows: [] } as HistorySnapshot, writes: 0, loseResponse: false,
     port: {} as ImportPort };
   state.port = {
+    readTransactions: async () => [TRANSACTION_HEADERS],
     readHistory: async () => structuredClone(state.snapshot),
     appendHistory: async (rows, create) => {
       state.writes++; if (create) { state.snapshot.exists = true; state.snapshot.headers = HISTORY_HEADERS; }
@@ -264,7 +273,8 @@ test('replaceHistory executes exactly 1 batchUpdate write, never calls values.cl
     spreadsheets: {
       get: async () => ({
         data: {
-          sheets: [{
+          sheets: [{ properties: { sheetId: 102, title: 'Transactions', sheetType: 'GRID',
+            gridProperties: { rowCount: 10, columnCount: 9 } } }, {
             properties: {
               sheetId: 101,
               title: 'MoneyLover_History',
@@ -278,9 +288,9 @@ test('replaceHistory executes exactly 1 batchUpdate write, never calls values.cl
         },
       }),
       values: {
-        get: async () => ({
+        get: async ({ range }: { range: string }) => ({
           data: {
-            values: grid.filter((r) => r.some((c) => c !== '' && c !== null && c !== undefined)),
+            values: range.includes('Transactions') ? [TRANSACTION_HEADERS] : grid.filter((r) => r.some((c) => c !== '' && c !== null && c !== undefined)),
           },
         }),
         clear: async () => {
@@ -313,7 +323,7 @@ test('replaceHistory executes exactly 1 batchUpdate write, never calls values.cl
     },
   };
 
-  const port = await makeHistoryImportPort(config, mockSheets);
+  const port = await makeHistoryImportPort(config, mockSheets, true);
 
   // 1. Check before snapshot and plan
   const beforeSnapshot = await port.readHistory();
@@ -370,6 +380,7 @@ headers=json.loads(sys.argv[2])
 ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 cells=''.join('<c r="'+chr(65+i)+'1" t="inlineStr"><is><t>'+X.escape(h)+'</t></is></c>' for i,h in enumerate(headers))
 data='<row r="1">'+cells+'</row><row r="2"><c r="B2"><v>46081</v></c><c r="C2" t="s"><v>0</v></c><c r="D2"><v>-123</v></c><c r="E2" t="inlineStr"><is><t>VND</t></is></c><c r="F2" t="inlineStr"><is><t>Wallet</t></is></c></row>'
+data+='<row r="3"><c r="B3"><v>46081</v></c><c r="C3" t="s"><v>0</v></c><c r="D3"><v>-54321</v></c><c r="E3" t="inlineStr"><is><t>JPY</t></is></c><c r="F3" t="inlineStr"><is><t>PRIVATE_WALLET_MARKER</t></is></c></row>'
 with zipfile.ZipFile(sys.argv[1],'w') as z:
  z.writestr('xl/workbook.xml','<workbook xmlns="'+ns+'" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Transaction" sheetId="1" r:id="rId1"/></sheets></workbook>')
  z.writestr('xl/_rels/workbook.xml.rels','<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>')
@@ -393,9 +404,16 @@ with zipfile.ZipFile(sys.argv[1],'w') as z:
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.equal(JSON.parse(dryRun.stdout).status, 'DRY_RUN_SOURCE_ONLY');
   assert.equal(JSON.parse(await readFile(report, 'utf8')).reconciliation.matches, true);
+  for (const output of [dryRun.stdout, await readFile(report, 'utf8')]) {
+    for (const privateValue of ['PRIVATE_WALLET_MARKER', '54321', 'expenseVnd', 'totalsByCurrency', 'categoryExpenseVnd', 'expected', 'actual']) {
+      assert.equal(output.includes(privateValue), false);
+    }
+  }
+  assert.equal(JSON.parse(dryRun.stdout).summary.sourceRows, 2);
+  assert.equal(runCli('--report', 'tests/forbidden-moneylover-report.json').stderr.trim(), 'REPORT_OUTSIDE_REPOSITORY_REQUIRED');
   assert.equal(runCli('--report', path).stderr.trim(), 'SOURCE_OVERWRITE_FORBIDDEN');
   const apply = runCli('--apply');
-  assert.equal(apply.status, 1); assert.equal(apply.stderr.trim(), 'SERVER_CONFIGURATION_ERROR');
+  assert.equal(apply.status, 1); assert.equal(apply.stderr.trim(), 'EXPECTATIONS_REQUIRED');
   assert.equal(apply.stderr.includes('private-marker'), false);
   await writeFile(expected, JSON.stringify({ rows: 99 }));
   const mismatch = runCli('--apply', '--expectations', expected);

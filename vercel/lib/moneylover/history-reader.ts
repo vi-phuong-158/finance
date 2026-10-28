@@ -1,6 +1,11 @@
 import { minorUnits, parseBoolean, validDate } from './schema.js';
 import type { MoneyLoverTransaction } from './schema.js';
 import { isNonConsumptionCategory } from '../categories.js';
+import { normalizeCategoryText } from '../categories.js';
+
+export function isSavingsWallet(wallet: string): boolean {
+  return normalizeCategoryText(wallet) === 'TIET KIEM';
+}
 
 export function isExcludedHistoryRow(t: { currency: string; category: string }): boolean {
   return t.currency !== 'VND' || isNonConsumptionCategory(t.category);

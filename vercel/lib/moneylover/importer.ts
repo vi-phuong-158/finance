@@ -5,10 +5,13 @@ import { isExcludedHistoryRow, readHistoryRow } from './history-reader.js';
 import { HISTORY_HEADERS, historyRow } from './schema.js';
 import type { MoneyLoverTransaction } from './schema.js';
 import type { ParseResult } from './parser.js';
+import { reviewOverlaps } from './overlap.js';
+import { historyAppendRequests } from './google-history.js';
 
 export type HistorySnapshot = { exists: boolean; headers: unknown[]; rows: unknown[][] };
 export type ImportPort = {
   readHistory: () => Promise<HistorySnapshot>;
+  readTransactions: () => Promise<unknown[][]>;
   appendHistory: (rows: unknown[][], create: boolean) => Promise<void>;
   replaceHistory?: (rows: unknown[][]) => Promise<void>;
 };
@@ -19,10 +22,11 @@ export function planImport(parsed: ParseResult, snapshot: HistorySnapshot) {
   if (parsed.rejected.length) throw new Error('SOURCE_ROWS_REJECTED');
   if ((snapshot.exists && !hasExpectedHeaders(snapshot.headers, HISTORY_HEADERS))
     || (!snapshot.exists && (snapshot.headers.length || snapshot.rows.length))) throw new Error('HISTORY_SCHEMA_MISMATCH');
-  const existing = new Map<string, string>();
+  const existing = new Map<string, string>(), historyIds = new Set<string>();
   for (const row of snapshot.rows.filter((r) => r.some((v) => v !== '' && v !== null && v !== undefined))) {
     const t = readHistoryRow(row);
-    if (existing.has(t.legacyId)) throw new Error('DUPLICATE_HISTORY_ID');
+    if (historyIds.has(t.legacyId)) throw new Error('DUPLICATE_HISTORY_ID');
+    historyIds.add(t.legacyId);
     if (isExcludedHistoryRow(t)) continue;
     existing.set(t.legacyId, canonicalContent(t));
   }
@@ -34,6 +38,10 @@ export function planImport(parsed: ParseResult, snapshot: HistorySnapshot) {
     if (old !== undefined && old !== canonicalContent(t)) throw new Error('HISTORY_CONTENT_CONFLICT');
     return old === undefined;
   });
+  if (snapshot.rows.length + pending.length + 1 > 50001) throw new Error('HISTORY_SOURCE_LIMIT_EXCEEDED');
+  // A deliberately conservative local ceiling; keep the complete import atomic rather than split writes.
+  const bytes = Buffer.byteLength(JSON.stringify({ requests: historyAppendRequests(pending.map(historyRow), 0, !snapshot.exists) }));
+  if (bytes + 1024 > 2 * 1024 * 1024) throw new Error('HISTORY_BATCH_TOO_LARGE');
   return { pending, skipped: parsed.transactions.length - pending.length, create: !snapshot.exists };
 }
 
@@ -83,12 +91,18 @@ export async function cleanupImportedHistory(port: ImportPort, apply = false) {
   return { ...base, status: 'CLEANED_UP' };
 }
 
-export async function importMoneyLover(parsed: ParseResult, port: ImportPort, apply = false) {
+export async function importMoneyLover(source: ParseResult, port: ImportPort, apply = false, decisions?: unknown) {
+  if (source.rejected.length) throw new Error('SOURCE_ROWS_REJECTED');
+  const transactions = await port.readTransactions();
+  const review = reviewOverlaps(source, transactions, decisions), parsed = review.parsed;
   const before = await port.readHistory(), plan = planImport(parsed, before);
-  const base = { inserted: 0, skipped: plan.skipped, pending: plan.pending.length, rejected: parsed.rejected.length };
+  const base = { inserted: 0, skipped: plan.skipped, pending: plan.pending.length, rejected: parsed.rejected.length,
+    create: plan.create, overlap: review.summary };
   if (!apply) return { ...base, status: 'DRY_RUN' };
-  if (!plan.pending.length) return { ...base, status: 'ALREADY_IMPORTED' };
+  if (review.summary.unresolvedCount) throw new Error('OVERLAP_REVIEW_REQUIRED');
+  if (!plan.pending.length && !plan.create) return { ...base, status: 'ALREADY_IMPORTED' };
   if (snapshotHash(await port.readHistory()) !== snapshotHash(before)) throw new Error('HISTORY_CHANGED_RETRY_DRY_RUN');
+  if (JSON.stringify(await port.readTransactions()) !== JSON.stringify(transactions)) throw new Error('TRANSACTIONS_CHANGED_RETRY_DRY_RUN');
   let responseLost = false;
   try {
     // One atomic Sheets batch; no automatic retry after an ambiguous write.
@@ -97,7 +111,7 @@ export async function importMoneyLover(parsed: ParseResult, port: ImportPort, ap
   let after: HistorySnapshot;
   try { after = await port.readHistory(); } catch { throw new Error('IMPORT_OUTCOME_UNKNOWN_READBACK_REQUIRED'); }
   const check = planImport(parsed, after);
-  if (check.pending.length) throw new Error(responseLost ? 'IMPORT_OUTCOME_UNKNOWN_READBACK_REQUIRED' : 'IMPORT_READBACK_MISMATCH');
+  if (check.create || check.pending.length) throw new Error(responseLost ? 'IMPORT_OUTCOME_UNKNOWN_READBACK_REQUIRED' : 'IMPORT_READBACK_MISMATCH');
   const previous = new Map(before.rows.map((r) => [String(r[0]), JSON.stringify(r)]));
   if (after.rows.some((r) => previous.has(String(r[0])) && previous.get(String(r[0])) !== JSON.stringify(r))
     || [...previous.keys()].some((id) => !after.rows.some((r) => r[0] === id))) throw new Error('HISTORY_CHANGED_DURING_IMPORT');

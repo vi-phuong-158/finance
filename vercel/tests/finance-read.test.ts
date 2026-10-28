@@ -10,6 +10,19 @@ import { financeFixture } from './moneylover-fixtures.js';
 import { HISTORY_HEADERS } from '../lib/moneylover/schema.js';
 import { financeReadRanges } from '../lib/google-finance-read.js';
 import { TRANSACTION_HEADERS } from '../lib/sheet-schema.js';
+import { EDIT_HEADERS } from '../lib/edit-schema.js';
+
+test('historical savings-wallet records stay in Sheets but are omitted from finance reads', () => {
+  const snapshot = financeFixture();
+  snapshot.history[1][7] = 'Tiết Kiệm';
+  const original = structuredClone(snapshot);
+  const rows = fromFinanceSnapshot(snapshot);
+  assert.equal(rows.some((r) => r.source === 'MONEYLOVER' && r.accountOrWallet === 'Tiết Kiệm'), false);
+  assert.deepEqual(snapshot, original);
+  const id = `moneylover:${snapshot.history[1][0]}`;
+  const edits = [EDIT_HEADERS, ['11111111-1111-4111-8111-111111111111', id, 'Cafe', '', false, 'CHI', '0', '2026-01-01T00:00:00Z']];
+  assert.equal(fromFinanceSnapshot({ ...snapshot, edits }).some((r) => r.id === id), false);
+});
 
 test('Sheets read ranges fit actual grids, enforce the allowlist and fail before truncating oversized sources', () => {
   const tabs = [{ title: 'Transactions', rows: 1000, columns: 26, type: 'GRID' },
@@ -51,6 +64,32 @@ test('dashboard excludes internal transfers and excluded source rows from VND to
   assert.equal(d.possibleDuplicateCount, 2);
   assert.equal(d.categorySummary.find((c) => c.name === 'Chuyển nội bộ')!.expense, 0);
   assert.equal(d.accountSummary.find((a) => a.name === 'Wallet A')!.expense, 12500);
+});
+
+test('reviewed history exclusions stay visible without duplicate warnings on either source', () => {
+  const snapshot = financeFixture();
+  snapshot.history[1][11] = true;
+  const rows = fromFinanceSnapshot(snapshot);
+  assert.equal(rows.length, 6);
+  assert.equal(rows.find((t) => t.id === `moneylover:${snapshot.history[1][0]}`)!.excludedFromReport, true);
+  assert.equal(rows.every((t) => !t.possibleDuplicate && t.possibleDuplicateCount === 0), true);
+  assert.equal(buildDashboard(rows, parseFinanceQuery({ month: '2026-02' }, true)).possibleDuplicateCount, 0);
+});
+
+test('duplicate warnings use effective edit exclusions and still flag unreviewed pairs', () => {
+  for (const source of ['bank', 'history'] as const) {
+    const snapshot = financeFixture();
+    const id = source === 'bank' ? `bank:${snapshot.bank[1][8]}` : `moneylover:${snapshot.history[1][0]}`;
+    const edit = ['11111111-1111-4111-8111-111111111111', id, 'Cafe', '', true, 'CHI', '0', '2026-03-01T00:00:00Z'];
+    const rows = fromFinanceSnapshot({ ...snapshot, edits: [EDIT_HEADERS, edit] });
+    assert.equal(rows.every((t) => !t.possibleDuplicate && t.possibleDuplicateCount === 0), true);
+    assert.equal(buildDashboard(rows, parseFinanceQuery({ month: '2026-02' }, true)).possibleDuplicateCount, 0);
+  }
+  const rows = fromFinanceSnapshot(financeFixture());
+  const candidates = rows.filter((t) => t.possibleDuplicate);
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates.every((t) => !t.excludedFromReport && t.possibleDuplicateCount === 1), true);
+  assert.equal(buildDashboard(rows, parseFinanceQuery({ month: '2026-02' }, true)).possibleDuplicateCount, 2);
 });
 test('report dimensions reconcile to eligible totals; real empty sources produce empty series', async () => {
   const snapshot = financeFixture();

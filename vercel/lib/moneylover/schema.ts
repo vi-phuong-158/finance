@@ -1,3 +1,5 @@
+import { maskSensitiveIdentifiers } from '../../sensitive-identifiers.js';
+
 export const HISTORY_TAB = 'MoneyLover_History';
 export const HISTORY_HEADERS = [
   'legacy_id', 'date', 'type', 'amount', 'currency', 'amount_vnd', 'category', 'wallet',
@@ -21,7 +23,14 @@ export type MoneyLoverTransaction = {
   member: string;
 };
 
-export function historyRow(t: MoneyLoverTransaction): (string | number | boolean)[] {
+export function maskHistoryText(t: MoneyLoverTransaction): MoneyLoverTransaction {
+  return { ...t, ...Object.fromEntries(
+    (['category', 'wallet', 'note', 'counterparty', 'event', 'originalNo', 'member'] as const)
+      .map((key) => [key, maskSensitiveIdentifiers(t[key])])) };
+}
+
+export function historyRow(transaction: MoneyLoverTransaction): (string | number | boolean)[] {
+  const t = maskHistoryText(transaction);
   return [t.legacyId, t.date, t.type, t.amount, t.currency, t.amountVnd ?? '', t.category,
     t.wallet, t.note, t.counterparty, t.event, t.excludedFromReport, t.source, t.originalNo, t.member];
 }
