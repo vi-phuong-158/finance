@@ -83,7 +83,7 @@ fun InterestScreen(context: Context, onBack: () -> Unit) {
                         }
                     }
                     item {
-                        Text("Kỳ trọn tháng 25–25. Lãi ghi nhận khi hết kỳ; gốc trả giữa kỳ giảm lãi từ kỳ sau.",
+                        Text("Lãi theo dư nợ cuối ngày × số ngày thực tế × lãi suất năm ÷ 365. Chốt kỳ ngày 25; thu gốc giảm lãi từ ngày nhận. Dự kiến giả định không phát sinh thêm đến cuối kỳ.",
                             style = FinanceTheme.typography.bodyMedium, color = FinanceTheme.colors.textSecondary)
                         Text("Khoản vay · ${current.loans.size}", style = FinanceTheme.typography.titleLarge,
                             modifier = Modifier.padding(top = 16.dp))

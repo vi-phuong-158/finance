@@ -32,7 +32,7 @@ function snapshot(): InterestSnapshot {
   disbursements: [DISBURSEMENT_HEADERS, ...data.disbursements.map((t) => [t.id, t.loanId, t.principal, t.annualRate, serial(t.date), serial(t.maturity!)])], config };
 }
 
-test('25 boundaries, leap month and year transitions never count days', () => {
+test('settlement boundaries, leap dates and year transitions are validated', () => {
   assert.equal(periodStart('2024-02-24'), '2024-01-25');
   assert.equal(periodStart('2024-02-25'), '2024-02-25');
   assert.equal(firstPeriod('2024-01-26'), '2024-02-25');
@@ -44,10 +44,10 @@ test('25 boundaries, leap month and year transitions never count days', () => {
 test('merged disbursements, mid-period principal payment, duplicate cash receipts and prior dates preserve history', () => {
   const data = fixture(), before = structuredClone(data);
   const apr24 = buildInterest(data, '2024-04-24').loans[0];
-  assert.equal(apr24.accruedInterest, 150000); assert.equal(apr24.currentInterest, 120000);
+  assert.equal(apr24.accruedInterest, Math.round((3000000 * 77 + 9000000 * 29) * .12 / 365)); assert.equal(apr24.currentInterest, Math.round((12000000 * 4 + 11000000 * 27) * .12 / 365));
   const apr25 = buildInterest(data, '2024-04-25').loans[0];
-  assert.equal(apr25.accruedInterest, 270000); assert.equal(apr25.currentInterest, 110000);
-  assert.equal(apr25.paidInterest, 180000); assert.equal(apr25.interestDue, 90000);
+  assert.equal(apr25.accruedInterest, 275178); assert.equal(apr25.currentInterest, Math.round(11000000 * 30 * .12 / 365));
+  assert.equal(apr25.paidInterest, 180000); assert.equal(apr25.interestDue, 95178);
   assert.equal(apr25.outstandingPrincipal, 11000000); assert.equal(apr25.payments.length, 3);
   assert.equal(buildInterest(data, '2024-04-26').loans[0].accruedInterest, apr25.accruedInterest);
   assert.equal(buildInterest(data, '2024-03-28').loans[0].paidInterest, 0);
@@ -56,14 +56,14 @@ test('merged disbursements, mid-period principal payment, duplicate cash receipt
 });
 test('boundary principal payment reduces the new period; early interest is an advance, not lost to MAX(0)', () => {
   const data = fixture(); data.payments[0].date = '2024-03-25';
-  assert.equal(buildInterest(data, '2024-03-25').loans[0].currentInterest, 110000);
+  assert.equal(buildInterest(data, '2024-03-25').loans[0].currentInterest, Math.round(11000000 * 31 * .12 / 365));
   data.payments.push({ row: 6, loanId: 'LN-A', type: 'Thu lãi', amount: 500000, date: '2024-04-01' });
   const d = buildInterest(data, '2024-04-26').loans[0];
   assert.equal(d.advanceInterest, d.paidInterest - d.accruedInterest);
   assert.equal(d.interestDue, 0); assert.equal(d.currentRemaining, 0);
   assert.equal(d.collectedThisPeriod, 0);
 });
-test('anonymized multiple-disbursement golden flow uses 25–25 principal and preserves distinct identical receipts', () => {
+test('anonymized multiple-disbursement golden flow uses actual days/365 and preserves distinct identical receipts', () => {
   // Synthetic amounts, dates, rate and borrower; no personal spreadsheet records in Git.
   const data: InterestData = { loans: [{ id: 'GOLDEN', name: 'Synthetic borrower', principal: 90000000 }],
     disbursements: [
@@ -76,12 +76,12 @@ test('anonymized multiple-disbursement golden flow uses 25–25 principal and pr
     ] };
   const march = buildInterest(data, '2024-03-29').loans[0];
   assert.equal(march.outstandingPrincipal, 84000000);
-  assert.equal(march.currentInterest, 900000);
+  assert.equal(march.currentInterest, 864000);
   assert.equal(march.paidInterest, 600000);
   const april = buildInterest(data, '2024-04-25').loans[0];
-  assert.equal(april.currentInterest, 840000);
-  assert.equal(april.accruedInterest, 2000000);
-  assert.equal(april.interestDue, 1400000);
+  assert.equal(april.currentInterest, 828493);
+  assert.equal(april.accruedInterest, 2037699);
+  assert.equal(april.interestDue, 1437699);
   assert.equal(april.payments.length, 3);
 });
 test('unsafe cumulative interest receipts fail closed instead of silently losing integer precision', () => {
@@ -92,7 +92,7 @@ test('unsafe cumulative interest receipts fail closed instead of silently losing
   ];
   assert.throws(() => buildInterest(data, '2024-04-25'), /INVALID_INTEREST_ROW/);
 });
-test('maturities keep separate cutoff dates and no partial final period or interest capitalization', () => {
+test('maturities include partial final periods, stop ordinary interest at cutoff and never capitalize interest', () => {
   const data = fixture();
   const old = buildInterest(data, '2025-03-25');
   assert.equal(old.totals.currentInterest, 0);
@@ -101,7 +101,7 @@ test('maturities keep separate cutoff dates and no partial final period or inter
   data.payments.push({ row: 6, loanId: 'LN-A', type: 'Thu gốc', amount: 11000000, date: '2024-04-28' });
   const may = buildInterest(data, '2024-05-25').loans[0];
   assert.equal(may.currentInterest, 0); assert.equal(may.status, 'Đã tất toán');
-  assert.equal(may.accruedInterest, 380000);
+  assert.equal(may.accruedInterest, Math.round((3000000 * 81 + 2000000 * 30 + 9000000 * 63) * .12 / 365));
   data.payments[0].amount = 13000000;
   assert.throws(() => buildInterest(data, '2024-05-25'), /INTEREST_OVERPAYMENT/);
 });
@@ -136,14 +136,14 @@ test('interest API authenticates before Sheets, does not fall back to the bank s
   const secretError = await readInterest(request, env, async () => { throw Error('private-upstream-details'); });
   assert.deepEqual(secretError.body, { error: 'INTEREST_READ_UNAVAILABLE' });
 });
-test('allowlisted bounded ranges reject source truncation; monthly formula templates are reproducible', () => {
+test('allowlisted bounded ranges reject source truncation; daily formula templates are reproducible', () => {
   const tabs = [['Khoản vay', 300, 20], ['Giao dịch', 500, 6], ['Đợt giải ngân', 300, 12], ['Cấu hình', 20, 4]]
     .map(([title, rows, columns]) => ({ title: String(title), rows: Number(rows), columns: Number(columns), type: 'GRID' }));
   assert.deepEqual(interestReadRanges(tabs), ["'Khoản vay'!A1:T300", "'Giao dịch'!A1:F500", "'Đợt giải ngân'!A1:L300", "'Cấu hình'!A1:B20"]);
   assert.throws(() => interestReadRanges([{ ...tabs[0], rows: 301 }, ...tabs.slice(1)]), /LIMIT/);
   assert.throws(() => interestReadRanges(tabs.slice(1)), /SCHEMA/);
   assert.equal(trancheFormulas(2).length, 6); assert.equal(loanFormulas(2).length, 8);
-  assert.equal([...trancheFormulas(2), ...loanFormulas(2)].some((f) => f.includes('/365')), false);
+  assert.equal([...trancheFormulas(2), ...loanFormulas(2)].some((f) => f.includes('/365')), true);
 });
 test('HTTP adapter marks financial responses private and uncached even for rejected requests', async () => {
   const headers: Record<string, string> = {};
@@ -152,4 +152,42 @@ test('HTTP adapter marks financial responses private and uncached even for rejec
     status: (code) => { status = code; return { json: () => undefined }; } });
   assert.equal(status, 405); assert.equal(headers['Cache-Control'], 'no-store');
   assert.equal(headers['Vary'], 'X-Webhook-Secret'); assert.equal(headers.Allow, 'GET');
+});
+
+test('actual/365 counts leap day, includes disbursement day and excludes maturity day', () => {
+  const data: InterestData = { loans: [{ id: 'L', name: 'Synthetic', principal: 3650000 }],
+    disbursements: [{ id: 'D', loanId: 'L', principal: 3650000, annualRate: .1, date: '2024-02-24', maturity: '2024-03-02' }], payments: [] };
+  assert.equal(buildInterest(data, '2024-02-24').loans[0].currentInterest, 1000);
+  const close = buildInterest(data, '2024-03-25').loans[0];
+  assert.equal(close.accruedInterest, 7000); // Feb 24–29 and Mar 1: seven days, including leap day.
+  assert.equal(close.currentInterest, 0);
+});
+
+test('FIFO same-day receipts, different rates, future events and unsorted rows agree with an independent daily ledger', () => {
+  const data: InterestData = { loans: [{ id: 'L', name: 'Synthetic', principal: 3000000 }],
+    disbursements: [
+      { id: 'A', loanId: 'L', principal: 1000000, annualRate: .08, date: '2024-01-18', maturity: '2024-04-03' },
+      { id: 'B', loanId: 'L', principal: 1500000, annualRate: .12, date: '2024-02-02', maturity: null },
+      { id: 'C', loanId: 'L', principal: 500000, annualRate: .2, date: '2024-06-01', maturity: null }],
+    payments: [
+      { row: 4, loanId: 'L', type: 'Thu gốc', amount: 900000, date: '2024-03-12' },
+      { row: 2, loanId: 'L', type: 'Thu gốc', amount: 800000, date: '2024-02-25' },
+      { row: 3, loanId: 'L', type: 'Thu gốc', amount: 400000, date: '2024-02-25' },
+      { row: 5, loanId: 'L', type: 'Thu gốc', amount: 400000, date: '2024-04-28' }] };
+  for (const asOf of ['2024-02-24', '2024-02-25', '2024-02-29', '2024-03-12', '2024-03-25', '2024-04-25']) {
+    const result = buildInterest(data, asOf), from = result.period.from, to = result.period.to;
+    let closed = 0, current = 0;
+    for (let stamp = Date.parse('2024-01-18'); stamp < Date.parse(to); stamp += 86400000) {
+      const day = new Date(stamp).toISOString().slice(0, 10);
+      let paid = data.payments.filter(p => p.date <= day && p.date <= asOf).reduce((sum, p) => sum + p.amount, 0);
+      let interest = 0;
+      for (const d of data.disbursements) {
+        const allocation = Math.min(d.principal, paid); paid -= allocation;
+        if (d.date <= day && d.date <= asOf && (!d.maturity || day < d.maturity)) interest += (d.principal - allocation) * d.annualRate / 365;
+      }
+      if (day < from) closed += interest; else current += interest;
+    }
+    assert.equal(result.loans[0].accruedInterest, Math.round(closed), asOf);
+    assert.equal(result.loans[0].currentInterest, Math.round(current), asOf);
+  }
 });

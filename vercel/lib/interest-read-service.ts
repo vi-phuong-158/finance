@@ -28,7 +28,7 @@ export async function readInterest(request: ReadRequest, env: Environment,
     const snapshot = await port.readInterest();
     const { data, asOf } = parseInterestSnapshot(snapshot);
     const body = buildInterest(data, requestedDate ?? asOf);
-    // Fail closed if Sheet formulas drift from the same monthly engine used by the app.
+    // Fail closed if Sheet formulas drift from the same daily engine used by the app.
     if (!requestedDate) for (const loan of body.loans) {
       const row = snapshot.loans.find((r) => r[0] === loan.id)!;
       const fields = [[6, loan.currentInterest], [8, loan.accruedInterest], [9, loan.paidInterest],

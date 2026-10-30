@@ -700,3 +700,6 @@ Khi phải lựa chọn giữa hiệu ứng đẹp và độ tin cậy dữ li�
 
 ## Bổ sung 26/10/2026: kỳ lãi tháng
 Màn Theo dõi tiền lãi dùng Lãi kỳ hiện tại · chưa chốt, Lãi đã chốt, Lãi đến hạn còn thu, kỳ 25–25 và lịch sử từng đợt/thu tiền. Nhãn Lãi hôm nay ở mô tả cũ được thay thế. Thiếu kết nối hiển thị lỗi thật, không dùng dữ liệu mẫu. Giữ font Be Vietnam Pro, theme và component hiện có.
+
+## Bổ sung 29/10/2026: lãi Actual/365
+Thay quy tắc tháng bằng dư nợ cuối ngày × số ngày thực tế × lãi suất năm / 365; vẫn chốt ngày 25. Lãi kỳ hiện tại là dự kiến đến cuối kỳ, giả định không có giao dịch mới. Giải ngân/thu gốc có hiệu lực ngay ngày thực tế.

@@ -71,7 +71,7 @@ class InterestRepository(context: Context) {
         }
 
     private fun parse(json: JSONObject): InterestDashboard {
-        require(json.getString("rule") == "MONTHLY_25_V1")
+        require(json.getString("rule") == "DAILY_ACT365_25_V1")
         val totals = json.getJSONObject("totals")
         val period = json.getJSONObject("period")
         val rows = json.getJSONArray("loans")

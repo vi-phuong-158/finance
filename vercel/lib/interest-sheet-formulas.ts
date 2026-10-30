@@ -1,15 +1,18 @@
-// These formulas and the read engine implement MONTHLY_25_V1; no daily accrual.
+// DAILY_ACT365_25_V1: actual closing balances, actual days / 365; settlements on the 25th.
 export function trancheFormulas(r: number): string[] {
   const cfg = "'Cấu hình'!", pay = "'Giao dịch'!";
-  const repaid = (date: string) => `SUMIFS(${pay}$E:$E,${pay}$B:$B,B${r},${pay}$C:$C,"Thu gốc",${pay}$A:$A,">0",${pay}$A:$A,"<="&${date})`;
-  const opening = (date: string) => `MAX(0,C${r}-MAX(0,${repaid(date)}-H${r}))`;
+  const dates = `${pay}$A$2:$A$50001`, amounts = `${pay}$E$2:$E$50001`;
+  const loans = `${pay}$B$2:$B$50001`, kinds = `${pay}$C$2:$C$50001`;
+  const repaid = (date: string) => `SUMIFS(${amounts},${loans},B${r},${kinds},"Thu gốc",${dates},">0",${dates},"<="&MIN(${date},${cfg}$B$2))`;
+  const balance = (date: string) => `MAX(0,C${r}-MAX(0,${repaid(date)}-H${r}))`;
+  const integral = (from: string, to: string) => `=IF(A${r}="","",IF(E${r}>${cfg}$B$2,0,LET(lo,MAX(E${r},${from}),hi,MIN(${to},IF(F${r}="",${to},F${r})),IF(hi<=lo,0,LET(cuts,SORT(UNIQUE(VSTACK(lo,hi,IFERROR(FILTER(${dates},${loans}=B${r},${kinds}="Thu gốc",${dates}>lo,${dates}<hi,${dates}<=${cfg}$B$2),lo)))),SUM(MAP(SEQUENCE(ROWS(cuts)-1),LAMBDA(idx,${balance('INDEX(cuts,idx)')}*(INDEX(cuts,idx+1)-INDEX(cuts,idx))*D${r}/365))))))))`;
   return [
-    `=IF(A${r}="","",DATE(YEAR(E${r}),MONTH(E${r})+IF(DAY(E${r})>25,1,0),25))`,
+    `=IF(A${r}="","",E${r})`,
     `=IF(A${r}="","",SUMIFS($C$2:$C$300,$B$2:$B$300,B${r},$E$2:$E$300,"<"&E${r})+SUMIFS($C$2:$C$300,$B$2:$B$300,B${r},$E$2:$E$300,E${r},$A$2:$A$300,"<"&A${r}))`,
-    `=IF(A${r}="","",IF(G${r}>${cfg}$B$7,0,${opening(`${cfg}$B$7`)}))`,
-    `=IF(A${r}="","",LET(cutoff,MIN(${cfg}$B$2,IF(F${r}="",${cfg}$B$2,F${r})),lastcut,DATE(YEAR(cutoff),MONTH(cutoff)-IF(DAY(cutoff)<25,1,0),25),MAX(0,(YEAR(lastcut)-YEAR(G${r}))*12+MONTH(lastcut)-MONTH(G${r}))))`,
-    `=IF(A${r}="","",IF(J${r}=0,0,SUM(MAP(SEQUENCE(J${r}),LAMBDA(idx,${opening(`EDATE(G${r},idx-1)`)}*D${r}/12)))))`,
-    `=IF(A${r}="","",IF(AND(G${r}<=${cfg}$B$7,OR(F${r}="",F${r}>=${cfg}$B$8)),I${r}*D${r}/12,0))`,
+    `=IF(A${r}="","",IF(E${r}>${cfg}$B$7,0,${balance(`${cfg}$B$7`)}))`,
+    `=IF(A${r}="","",LET(cutoff,MIN(${cfg}$B$2,IF(F${r}="",${cfg}$B$2,F${r})),lastcut,DATE(YEAR(cutoff),MONTH(cutoff)-IF(DAY(cutoff)<25,1,0),25),firstcut,DATE(YEAR(E${r}),MONTH(E${r})-IF(DAY(E${r})<25,1,0),25),MAX(0,(YEAR(lastcut)-YEAR(firstcut))*12+MONTH(lastcut)-MONTH(firstcut))))`,
+    integral(`E${r}`,`${cfg}$B$7`),
+    integral(`${cfg}$B$7`,`${cfg}$B$8`),
   ];
 }
 export function loanFormulas(r: number): string[] {
