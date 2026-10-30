@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Icon
+import vn.phuong.financebridge.ui.util.CategoryVisuals
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -54,9 +56,10 @@ suspend fun prepareEdit(context: Context, api: FinanceApi, shown: UiTransaction)
     else EditStart.Refused("Cần kết nối mạng để tải bản mới nhất trước khi sửa.")
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionEditForm(context: Context, transaction: UiTransaction, categories: List<CategoryChoice>, memory: CategoryMemoryIndex?,
-    onDismiss: () -> Unit, onQueued: () -> Unit, initial: EditFields? = null, replacing: String? = null) {
+    onDismiss: () -> Unit, onQueued: () -> Unit, initial: EditFields? = null, replacing: String? = null, embedded: Boolean = false, onSavingChanged: (Boolean) -> Unit = {}) {
     // `transaction` is the latest server state; `initial`/`replacing` re-apply a conflicting edit on top of it.
     val scope = rememberCoroutineScope()
     val id = rememberSaveable { UUID.randomUUID().toString() }
@@ -72,27 +75,42 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
         ?.takeIf { !(it.category == transaction.category && (transaction.revision != "0" || transaction.source == "MANUAL")) }
     var note by rememberSaveable { mutableStateOf(initial?.note ?: transaction.note) }
     var excluded by rememberSaveable { mutableStateOf(initial?.excluded ?: transaction.excluded) }
-    var menu by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
-    Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
-        Surface(shape = FinanceTheme.shapes.xLarge) {
-            Column(Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val form: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth().heightIn(max = 620.dp).imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(if (replacing != null) "Xác nhận lại thay đổi" else "Sửa giao dịch", style = FinanceTheme.typography.titleLarge)
                 Text(transaction.formattedAmount, style = FinanceTheme.typography.titleMedium)
-                Row {
-                    listOf("CHI" to "Chi", "THU" to "Thu").forEach { (value, label) ->
-                        TextButton(onClick = {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf("CHI" to "Chi", "THU" to "Thu").forEachIndexed { index, (value, label) ->
+                        SegmentedButton(selected = type == value, onClick = {
                             type = value
                             if (categories.none { it.name == category && (it.type == type || it.type == "BOTH") }) category = "Chưa phân loại"
-                        }) { Text(if (type == value) "✓ $label" else label) }
+                        }, shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
                     }
                 }
-                Box {
-                    OutlinedButton(onClick = { menu = true }) { Text("Danh mục: $category") }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        categories.filter { it.type == type || it.type == "BOTH" }.forEach { choice ->
-                            DropdownMenuItem(text = { Text(choice.name) }, onClick = { category = choice.name; menu = false })
+                Text("Danh mục", style = FinanceTheme.typography.titleMedium)
+                BoxWithConstraints {
+                    val columns = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 360) 3 else 4
+                    val filtered = categories.filter { it.type == type || it.type == "BOTH" }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (suggestion != null && filtered.any { it.name == suggestion.category }) {
+                            Text("Đề xuất", style = FinanceTheme.typography.caption)
+                            FilterChip(selected = category == suggestion.category, onClick = { category = suggestion.category },
+                                label = { Text(suggestion.category) },
+                                leadingIcon = { Icon(CategoryVisuals.icon(suggestion.category), null, tint = CategoryVisuals.color(suggestion.category, FinanceTheme.colors), modifier = Modifier.size(18.dp)) })
+                        }
+                        filtered.filterNot { it.name == suggestion?.category }.chunked(columns).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                row.forEach { choice ->
+                                    FilterChip(selected = category == choice.name, onClick = { category = choice.name },
+                                        label = { Text(choice.name, maxLines = 2) },
+                                        leadingIcon = { Icon(CategoryVisuals.icon(choice.name), null, tint = CategoryVisuals.color(choice.name, FinanceTheme.colors), modifier = Modifier.size(18.dp)) },
+                                        modifier = Modifier.weight(1f))
+                                }
+                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
                         }
                     }
                 }
@@ -107,12 +125,13 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
                 if (category == "Chuyển nội bộ") Text("Chuyển nội bộ luôn được loại khỏi tổng thu chi.", style = FinanceTheme.typography.caption)
                 Text("Giữ nguyên giao dịch nguồn và lưu lịch sử sửa đổi.", style = FinanceTheme.typography.caption)
                 error?.let { Text(it, color = FinanceTheme.colors.expense) }
+            }
                 Button(enabled = !saving, modifier = Modifier.fillMaxWidth(), onClick = {
                     val input = TransactionEditInput(id, transaction.id, transaction.revision, category, note, excluded, type)
                     runCatching { input.validate(categories) }.onFailure { error = it.message ?: "Kiểm tra thông tin vừa nhập." }.onSuccess {
                         val payload = JSONObject().put("requestId", id).put("transactionId", transaction.id).put("baseRevision", transaction.revision)
                             .put("category", category).put("note", note).put("excluded", excluded).put("type", type)
-                        saving = true; error = null
+                        saving = true; onSavingChanged(true); error = null
                         scope.launch {
                             try {
                                 if (replacing != null) supersedeEdit(context, replacing, id, payload.toString())
@@ -127,12 +146,14 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
                                     else -> "Chưa lưu được yêu cầu trên máy. Vui lòng thử lại."
                                 }
                             }
-                            finally { saving = false }
+                            finally { saving = false; onSavingChanged(false) }
                         }
                     }
                 }) { Text(if (saving) "Đang lưu…" else "Lưu thay đổi") }
                 TextButton(enabled = !saving, onClick = onDismiss) { Text("Hủy") }
-            }
         }
+    }
+    if (embedded) form() else Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
+        Surface(shape = FinanceTheme.shapes.xLarge) { form() }
     }
 }

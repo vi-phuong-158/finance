@@ -9,16 +9,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import vn.phuong.financebridge.ui.components.*
 import vn.phuong.financebridge.ui.data.FinanceApi
 import vn.phuong.financebridge.ui.data.parseTransaction
+import vn.phuong.financebridge.ui.data.latestTransaction
+import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.FinancePeriod
+import vn.phuong.financebridge.ui.util.CategoryVisuals
 import vn.phuong.financebridge.CategoryChoice
 import vn.phuong.financebridge.CategoryMemoryIndex
 import vn.phuong.financebridge.ui.data.CategoryMemoryRepository
@@ -26,8 +31,9 @@ import vn.phuong.financebridge.ui.data.CategoryMemoryRepository
 private data class TransactionPage(val rows: List<UiTransaction>, val cursor: String?, val total: Int,
     val categories: List<CategoryChoice>, val editingEnabled: Boolean)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
+fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialTransactionId: String? = null, initialTransaction: UiTransaction? = null, onInitialConsumed: () -> Unit = {}) {
     val api = remember(context) { FinanceApi(context) }
     var search by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("") }
@@ -42,6 +48,9 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
     var revision by remember { mutableStateOf(0) }
     var rows by remember { mutableStateOf<List<UiTransaction>>(emptyList()) }
     var selected by remember { mutableStateOf<UiTransaction?>(null) }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editRequested by rememberSaveable { mutableStateOf(false) }
+    var expandedDescription by rememberSaveable { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var inputError by remember { mutableStateOf<String?>(null) }
@@ -50,11 +59,36 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
     var editingEnabled by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<UiTransaction?>(null) }
     var opening by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    var savingEdit by remember { mutableStateOf(false) }
     var savedMessage by remember { mutableStateOf<String?>(null) }
     val memoryRepository = remember(context) { CategoryMemoryRepository(context) }
     var memory by remember { mutableStateOf<CategoryMemoryIndex?>(null) }
 
+    LaunchedEffect(initialTransactionId) {
+        if (initialTransactionId != null) {
+            selectedId = initialTransactionId
+            selected = initialTransaction?.takeIf { it.id == initialTransactionId }
+            val lookup = api.latestTransaction(initialTransactionId).getOrNull()
+            if (selected == null) selected = lookup?.transaction
+            lookup?.let { categories = it.categories; editingEnabled = it.editingEnabled }
+            if (selected == null) { selectedId = null; savedMessage = "Không tải được giao dịch. Vui lòng thử lại." }
+            onInitialConsumed()
+        }
+    }
+    LaunchedEffect(rows, selectedId) {
+        if (selected == null && selectedId != null) selected = rows.firstOrNull { it.id == selectedId }
+    }
+    LaunchedEffect(selected, editRequested) {
+        val transaction = selected
+        if (transaction != null && editRequested && editing == null && !opening) {
+            opening = true
+            when (val start = prepareEdit(context, api, transaction)) {
+                is EditStart.Ready -> { start.categories?.let { categories = it }; editing = start.transaction }
+                is EditStart.Refused -> { savedMessage = start.message; editRequested = false }
+            }
+            opening = false
+        }
+    }
     LaunchedEffect(revision) {
         // Cache first so suggestions appear instantly and offline; refresh replaces it when online.
         memory = memoryRepository.cached()
@@ -133,7 +167,7 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
             Text("Đang hiển thị ${rows.size}/$total giao dịch", style = FinanceTheme.typography.caption)
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 56.dp)) {
                 items(rows, key = { it.id }) { transaction ->
-                    FinanceCard(contentPadding = 8.dp) { TransactionRow(transaction, onClick = { selected = transaction }) }
+                    FinanceCard(contentPadding = 8.dp) { TransactionRow(transaction, onClick = { selectedId = transaction.id; selected = transaction; expandedDescription = false }) }
                 }
                 item {
                     if (nextCursor != null) SecondaryButton(text = if (loading) "Đang tải…" else "Xem thêm", enabled = !loading,
@@ -143,35 +177,39 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier) {
         }
     }
     selected?.let { transaction ->
-        AlertDialog(onDismissRequest = { selected = null }, title = { Text("Chi tiết giao dịch") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(transaction.formattedAmount, color = FinanceTheme.colors.primary)
-                    Text(transaction.category)
-                    Text(transaction.title)
-                    Text(transaction.formattedDate)
-                    Text(transaction.accountOrBank)
-                    Text(when (transaction.source) { "MONEYLOVER" -> "Nguồn: Nhập lịch sử"; "MANUAL" -> "Nguồn: Ghi chép thủ công"; else -> "Nguồn: Thông báo ngân hàng" })
-                    if (transaction.isDuplicateCandidate) Text("Có thể trùng giao dịch từ nguồn khác. Cần đối soát.", color = FinanceTheme.colors.expense)
-                    if (transaction.excluded) Text("Không tính vào tổng thu chi.")
-                    if (!editingEnabled) Text("Chưa mở chỉnh sửa trên máy chủ.", style = FinanceTheme.typography.caption)
-                }
-            }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Đóng") } },
-            dismissButton = { if (editingEnabled) TextButton(enabled = !opening, onClick = {
-                scope.launch {
-                    opening = true
-                    when (val start = prepareEdit(context, api, transaction)) {
-                        is EditStart.Ready -> { start.categories?.let { categories = it }; editing = start.transaction }
-                        is EditStart.Refused -> savedMessage = start.message
+        ModalBottomSheet(onDismissRequest = { if (!savingEdit) { selected = null; selectedId = null; editing = null; editRequested = false } }) {
+            if (editing != null) {
+                TransactionEditForm(context, editing!!, categories, memory, embedded = true, onSavingChanged = { savingEdit = it },
+                    onDismiss = { editing = null; editRequested = false }, onQueued = {
+                        editing = null; selected = null; selectedId = null; editRequested = false; cursor = null; revision++
+                        savedMessage = "Đã lưu thay đổi trên máy. Bấm Tải lại sau khi đồng bộ để xem kết quả."
+                    })
+            } else {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(CategoryVisuals.icon(transaction.category), null,
+                            tint = CategoryVisuals.color(transaction.category, FinanceTheme.colors))
+                        Column {
+                            Text(transaction.formattedAmount, style = FinanceTheme.typography.titleLarge,
+                                color = if (transaction.type == TransactionType.THU) FinanceTheme.colors.income else FinanceTheme.colors.expense)
+                            Text(transaction.category, style = FinanceTheme.typography.titleMedium)
+                        }
                     }
-                    selected = null; opening = false
+                    Text(transaction.title, maxLines = if (expandedDescription) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
+                    if (transaction.title.isNotBlank()) TextButton(onClick = { expandedDescription = !expandedDescription }) { Text(if (expandedDescription) "Thu gọn" else "Xem đầy đủ") }
+                    Row(Modifier.fillMaxWidth()) {
+                        Column(Modifier.weight(1f)) { Text("Tài khoản", style = FinanceTheme.typography.caption); Text(transaction.accountOrBank) }
+                        Column(Modifier.weight(1f)) { Text("Thời gian", style = FinanceTheme.typography.caption); Text(transaction.formattedDate) }
+                    }
+                    Row(Modifier.fillMaxWidth()) {
+                        Column(Modifier.weight(1f)) { Text("Nguồn", style = FinanceTheme.typography.caption); Text(when (transaction.source) { "MONEYLOVER" -> "Nhập lịch sử"; "MANUAL" -> "Ghi chép thủ công"; else -> "Thông báo ngân hàng" }) }
+                        Column(Modifier.weight(1f)) { Text("Trạng thái", style = FinanceTheme.typography.caption); Text(if (transaction.excluded) "Không tính vào báo cáo" else "Tính vào báo cáo") }
+                    }
+                    if (transaction.isDuplicateCandidate) Text("Có thể trùng giao dịch từ nguồn khác. Cần đối soát.", color = FinanceTheme.colors.expense)
+                    if (!editingEnabled) Text("Chưa mở chỉnh sửa trên máy chủ.", style = FinanceTheme.typography.caption)
+                    if (editingEnabled) Button(enabled = !opening, onClick = { editRequested = true }, modifier = Modifier.fillMaxWidth()) { Text(if (opening) "Đang tải…" else "Sửa") }
                 }
-            }) { Text(if (opening) "Đang tải…" else "Sửa") } })
-    }
-    editing?.let { transaction ->
-        TransactionEditForm(context, transaction, categories, memory, onDismiss = { editing = null }, onQueued = {
-            editing = null; selected = null; cursor = null; revision++
-            savedMessage = "Đã lưu thay đổi trên máy. Bấm Tải lại sau khi đồng bộ để xem kết quả."
-        })
+            }
+        }
     }
 }

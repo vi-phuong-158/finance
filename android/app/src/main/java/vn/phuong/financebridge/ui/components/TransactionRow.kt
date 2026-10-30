@@ -3,23 +3,19 @@ package vn.phuong.financebridge.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
+import vn.phuong.financebridge.ui.util.CategoryVisuals
 
 @Composable
 fun TransactionRow(
@@ -27,19 +23,9 @@ fun TransactionRow(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
-    val isIncome = transaction.type == TransactionType.THU
-    val iconBgColor = if (isIncome) {
-        FinanceTheme.colors.income.copy(alpha = 0.12f)
-    } else {
-        FinanceTheme.colors.expense.copy(alpha = 0.10f)
-    }
-    val iconTintColor = if (isIncome) {
-        FinanceTheme.colors.income
-    } else {
-        FinanceTheme.colors.expense
-    }
-
-    val icon = getCategoryIcon(transaction.category)
+    val icon = CategoryVisuals.icon(transaction.category)
+    val iconTintColor = CategoryVisuals.color(transaction.category, FinanceTheme.colors)
+    val iconBgColor = iconTintColor.copy(alpha = 0.12f)
 
     Row(
         modifier = modifier
@@ -115,22 +101,5 @@ fun TransactionRow(
                 fontSize = 15.sp,
             ),
         )
-    }
-}
-
-private fun getCategoryIcon(category: String): ImageVector {
-    val lower = category.lowercase()
-    return when {
-        lower.contains("ăn") || lower.contains("uống") || lower.contains("cà phê") -> Icons.Rounded.Restaurant
-        lower.contains("xăng") || lower.contains("xe") || lower.contains("di chuyển") -> Icons.Rounded.LocalGasStation
-        lower.contains("mua sắm") || lower.contains("siêu thị") -> Icons.Rounded.ShoppingCart
-        lower.contains("lương") || lower.contains("tiền chuyển đến") || lower.contains("thu nhập") -> Icons.Rounded.Payments
-        lower.contains("con") || lower.contains("học") -> Icons.Rounded.ChildCare
-        lower.contains("điện") || lower.contains("nước") || lower.contains("hóa đơn") -> Icons.Rounded.ElectricBolt
-        lower.contains("quà") || lower.contains("quyên góp") -> Icons.Rounded.CardGiftcard
-        lower.contains("nhà") || lower.contains("gia đình") -> Icons.Rounded.Home
-        lower.contains("sức khỏe") || lower.contains("thuốc") || lower.contains("khám") -> Icons.Rounded.MedicalServices
-        lower.contains("giải trí") || lower.contains("phim") -> Icons.Rounded.SportsEsports
-        else -> Icons.Rounded.Receipt
     }
 }
