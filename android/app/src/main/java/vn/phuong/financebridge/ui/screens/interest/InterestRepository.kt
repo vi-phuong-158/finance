@@ -4,15 +4,14 @@ import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import vn.phuong.financebridge.BuildConfig
 import vn.phuong.financebridge.WebhookConfiguration
 import vn.phuong.financebridge.WebhookCredentialStore
+import vn.phuong.financebridge.ui.data.UiReadHttpClient
 import vn.phuong.financebridge.ui.util.FinanceFormatters
-import java.util.concurrent.TimeUnit
 
 data class InterestEntry(val date: String, val label: String, val amount: Long, val maturity: String? = null)
 data class InterestLoan(
@@ -31,8 +30,7 @@ data class InterestDashboard(
 
 class InterestRepository(context: Context) {
     private val credentials = WebhookCredentialStore(context.applicationContext)
-    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
+    private val client = UiReadHttpClient.client
 
     suspend fun fetch(): Result<InterestDashboard> = withContext(Dispatchers.IO) {
         val secret = credentials.getSecret().orEmpty()
