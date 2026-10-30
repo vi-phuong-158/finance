@@ -74,7 +74,7 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
     var excluded by rememberSaveable { mutableStateOf(initial?.excluded ?: transaction.excluded) }
     var menu by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
         Surface(shape = FinanceTheme.shapes.xLarge) {
             Column(Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

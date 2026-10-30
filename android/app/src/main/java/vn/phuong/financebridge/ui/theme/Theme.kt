@@ -13,6 +13,7 @@ private val LightFinanceColors = FinanceColors(
     primary = Primary500,
     primaryContainer = Primary100,
     onPrimary = Color.White,
+    brandAccent = BrandAccent,
     background = BackgroundLight,
     surface = SurfaceLight,
     surfaceCard = SurfaceCardLight,
@@ -25,6 +26,10 @@ private val LightFinanceColors = FinanceColors(
     expense = ExpenseRed,
     warning = WarningGold,
     info = InfoBlue,
+    heroStart = HeroStart,
+    heroEnd = HeroEnd,
+    shadowAmbient = ShadowAmbientLight,
+    shadowSpot = ShadowSpotLight,
     isDark = false,
 )
 
@@ -32,6 +37,7 @@ private val DarkFinanceColors = FinanceColors(
     primary = PrimaryDark,
     primaryContainer = SurfaceElevatedDark,
     onPrimary = SurfaceDark,
+    brandAccent = BrandAccent,
     background = BackgroundDark,
     surface = SurfaceDark,
     surfaceCard = SurfaceElevatedDark,
@@ -44,6 +50,10 @@ private val DarkFinanceColors = FinanceColors(
     expense = ExpenseRed,
     warning = WarningGold,
     info = InfoBlue,
+    heroStart = PrimaryDark,
+    heroEnd = BrandAccent,
+    shadowAmbient = ShadowAmbientDark,
+    shadowSpot = ShadowSpotDark,
     isDark = true,
 )
 

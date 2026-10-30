@@ -32,7 +32,7 @@ fun LoanForm(context: Context, operation: LoanOperation, loan: InterestLoan?, as
     var date by rememberSaveable { mutableStateOf(FinanceFormatters.formatIsoDate(asOf)) }
     var maturity by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf(if (operation == LoanOperation.UPDATE_INFO) loan?.note.orEmpty() else "") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val creating = operation == LoanOperation.CREATE_LOAN
     val disbursing = creating || operation == LoanOperation.DISBURSEMENT

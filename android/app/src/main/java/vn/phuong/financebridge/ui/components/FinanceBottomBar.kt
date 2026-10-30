@@ -1,13 +1,15 @@
 package vn.phuong.financebridge.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -23,14 +25,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.theme.FinanceTheme
+import vn.phuong.financebridge.ui.util.WindowWidthTier
+import vn.phuong.financebridge.ui.util.adaptiveNavWidth
+import vn.phuong.financebridge.ui.util.rememberWindowWidthTier
 
 enum class NavigationTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Tổng quan", Icons.Rounded.Home),
-    ACCOUNTS("Tài khoản", Icons.Rounded.AccountBalanceWallet),
-    RECORD("Ghi chép", Icons.Rounded.Add),
+    TRANSACTIONS("Giao dịch", Icons.AutoMirrored.Rounded.ReceiptLong),
+    RECORD("+", Icons.Rounded.Add),
     REPORTS("Báo cáo", Icons.Rounded.PieChart),
-    MORE("Khác", Icons.Rounded.GridView),
-    TRANSACTIONS("Giao dịch", Icons.Rounded.AccountBalanceWallet), // internal route
+    MORE("Cá nhân", Icons.Rounded.Person), // Renamed from "Khác" to "Cá nhân" per UI V2 spec
+    ACCOUNTS("Tài khoản", Icons.Rounded.AccountBalanceWallet), // internal route
 }
 
 @Composable
@@ -40,9 +45,13 @@ fun FinanceBottomBar(
     modifier: Modifier = Modifier,
 ) {
     val barShape = FinanceTheme.shapes.xxl
+    val windowTier = rememberWindowWidthTier()
+    val isNarrow = windowTier == WindowWidthTier.NARROW_FOLD
+
+    // 5 primary navigation tabs as specified in UI V2 Phase F
     val visibleTabs = listOf(
         NavigationTab.DASHBOARD,
-        NavigationTab.ACCOUNTS,
+        NavigationTab.TRANSACTIONS,
         NavigationTab.RECORD,
         NavigationTab.REPORTS,
         NavigationTab.MORE,
@@ -52,36 +61,41 @@ fun FinanceBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(
+                horizontal = if (isNarrow) 10.dp else 16.dp,
+                vertical = 8.dp,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 72.dp)
+                .adaptiveNavWidth()
+                .heightIn(min = 68.dp)
                 .shadow(
                     elevation = FinanceTheme.spacing.elevationFloating,
                     shape = barShape,
-                    ambientColor = Color(0x14000000),
-                    spotColor = Color(0x2E08A9D6),
+                    ambientColor = FinanceTheme.colors.shadowAmbient,
+                    spotColor = FinanceTheme.colors.shadowSpot,
                 )
                 .clip(barShape)
-                .background(FinanceTheme.colors.primary)
-                .padding(horizontal = 4.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .background(FinanceTheme.colors.surfaceGlass)
+                .border(1.dp, FinanceTheme.colors.borderGlass, barShape)
+                .padding(horizontal = if (isNarrow) 4.dp else 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             visibleTabs.forEach { tab ->
                 if (tab == NavigationTab.RECORD) {
-                    RecordTabItem(
-                        isSelected = currentTab == NavigationTab.RECORD,
+                    RecordCenterButton(
                         onSelect = { onTabSelected(NavigationTab.RECORD) },
                         modifier = Modifier.weight(1f),
                     )
                 } else {
-                    TabItem(
+                    NavigationTabItem(
                         tab = tab,
                         isSelected = currentTab == tab,
+                        isNarrow = isNarrow,
                         onSelect = { onTabSelected(tab) },
                         modifier = Modifier.weight(1f),
                     )
@@ -92,35 +106,39 @@ fun FinanceBottomBar(
 }
 
 @Composable
-private fun TabItem(
+private fun NavigationTabItem(
     tab: NavigationTab,
     isSelected: Boolean,
+    isNarrow: Boolean,
     onSelect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val activeColor = Color.White
-    val inactiveColor = Color.White.copy(alpha = 0.65f)
+    val activeColor = FinanceTheme.colors.primary
+    val inactiveColor = FinanceTheme.colors.textMuted
 
     Column(
         modifier = modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 56.dp)
+            .defaultMinSize(minWidth = 48.dp, minHeight = 52.dp)
             .clip(FinanceTheme.shapes.medium)
             .clickable(onClick = onSelect)
             .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        // Mint pill indicator for active tab
         Box(
             modifier = Modifier
-                .size(34.dp)
+                .height(30.dp)
+                .defaultMinSize(minWidth = if (isSelected) 44.dp else 30.dp)
                 .clip(FinanceTheme.shapes.pill)
-                .background(if (isSelected) Color.White.copy(alpha = 0.20f) else Color.Transparent),
+                .background(if (isSelected) FinanceTheme.colors.primaryContainer else Color.Transparent)
+                .padding(horizontal = if (isSelected) 10.dp else 4.dp),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = tab.icon,
                 contentDescription = tab.label,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(20.dp),
                 tint = if (isSelected) activeColor else inactiveColor,
             )
         }
@@ -128,8 +146,8 @@ private fun TabItem(
         Text(
             text = tab.label,
             style = FinanceTheme.typography.caption.copy(
-                fontSize = 11.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontSize = if (isNarrow) 10.sp else 11.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
             ),
             color = if (isSelected) activeColor else inactiveColor,
             maxLines = 1,
@@ -140,51 +158,35 @@ private fun TabItem(
 }
 
 @Composable
-private fun RecordTabItem(
-    isSelected: Boolean,
+private fun RecordCenterButton(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Box(
         modifier = modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 56.dp)
-            .clip(FinanceTheme.shapes.medium)
-            .clickable(onClick = onSelect)
-            .padding(horizontal = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .defaultMinSize(minWidth = 48.dp, minHeight = 52.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(50.dp)
                 .shadow(
                     elevation = 4.dp,
                     shape = FinanceTheme.shapes.pill,
-                    ambientColor = Color(0x18000000),
-                    spotColor = Color(0x30000000),
+                    ambientColor = FinanceTheme.colors.shadowAmbient,
+                    spotColor = FinanceTheme.colors.shadowSpot,
                 )
                 .clip(FinanceTheme.shapes.pill)
-                .background(Color.White),
+                .background(FinanceTheme.colors.primary)
+                .clickable(onClick = onSelect),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
                 contentDescription = "Ghi chép",
                 modifier = Modifier.size(28.dp),
-                tint = FinanceTheme.colors.primary,
+                tint = Color.White,
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = "Ghi chép",
-            style = FinanceTheme.typography.caption.copy(
-                fontSize = 11.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            ),
-            color = Color.White,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }

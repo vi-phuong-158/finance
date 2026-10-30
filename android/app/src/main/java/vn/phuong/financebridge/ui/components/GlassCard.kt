@@ -18,9 +18,8 @@ import androidx.compose.ui.unit.dp
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
 /**
- * Legacy name retained for source compatibility. The default treatment is now an opaque
- * white/surface card with a soft border, matching the app reference. Use transparency only
- * for deliberate accents such as the hero card, never as the default visual language.
+ * Legacy name retained for source compatibility. The default treatment is an opaque
+ * surface card with a soft border, matching the modern fintech design language.
  */
 @Composable
 fun GlassCard(
@@ -38,8 +37,8 @@ fun GlassCard(
             .shadow(
                 elevation = elevation,
                 shape = shape,
-                ambientColor = Color(0x08000000),
-                spotColor = Color(0x1008A9D6),
+                ambientColor = FinanceTheme.colors.shadowAmbient,
+                spotColor = FinanceTheme.colors.shadowSpot,
             )
             .clip(shape)
             .background(containerColor)
@@ -66,8 +65,8 @@ fun FinanceCard(
             .shadow(
                 elevation = elevation,
                 shape = shape,
-                ambientColor = Color(0x05000000),
-                spotColor = Color(0x0D08A9D6),
+                ambientColor = FinanceTheme.colors.shadowAmbient,
+                spotColor = FinanceTheme.colors.shadowSpot,
             ),
         shape = shape,
         color = containerColor,

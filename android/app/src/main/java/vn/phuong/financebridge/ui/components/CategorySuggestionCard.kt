@@ -31,11 +31,16 @@ fun CategorySuggestionCard(
         modifier = modifier
             .fillMaxWidth()
             .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.medium)
-            .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(Icons.Rounded.History, contentDescription = null, tint = FinanceTheme.colors.primary, modifier = Modifier.size(18.dp))
+        Icon(
+            imageVector = Icons.Rounded.History,
+            contentDescription = null,
+            tint = FinanceTheme.colors.primary,
+            modifier = Modifier.size(20.dp),
+        )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = suggestion.headline,
@@ -52,9 +57,31 @@ fun CategorySuggestionCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (!applied) TextButton(onClick = onApply, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Dùng", maxLines = 1) }
-        IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Rounded.Close, contentDescription = "Bỏ gợi ý", tint = FinanceTheme.colors.textMuted, modifier = Modifier.size(18.dp))
+        if (!applied) {
+            TextButton(
+                onClick = onApply,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+            ) {
+                Text(
+                    text = "Dùng",
+                    maxLines = 1,
+                    style = FinanceTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = FinanceTheme.colors.primary,
+                )
+            }
+        }
+        // Guaranteed touch target >= 48dp as required by a11y & UI V2 spec
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.size(48.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = "Bỏ gợi ý",
+                tint = FinanceTheme.colors.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }

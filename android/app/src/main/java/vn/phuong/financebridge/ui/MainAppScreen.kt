@@ -1,23 +1,26 @@
 package vn.phuong.financebridge.ui
 
 import android.content.Context
-import vn.phuong.financebridge.ManualSyncWorker
-import vn.phuong.financebridge.ui.screens.interest.InterestScreen
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import vn.phuong.financebridge.ManualSyncWorker
 import vn.phuong.financebridge.ui.components.FinanceBottomBar
 import vn.phuong.financebridge.ui.components.NavigationTab
 import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.screens.accounts.AccountsScreen
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardRepository
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardScreen
+import vn.phuong.financebridge.ui.screens.interest.InterestScreen
 import vn.phuong.financebridge.ui.screens.more.MoreScreen
+import vn.phuong.financebridge.ui.screens.record.ExtendedTransactionType
 import vn.phuong.financebridge.ui.screens.record.RecordScreen
 import vn.phuong.financebridge.ui.screens.reports.ReportsScreen
 import vn.phuong.financebridge.ui.screens.transactions.TransactionsScreen
@@ -29,8 +32,10 @@ fun MainAppScreen(
     context: Context,
     modifier: Modifier = Modifier,
 ) {
-    var currentTab by remember { mutableStateOf(NavigationTab.DASHBOARD) }
-    var showInterest by remember { mutableStateOf(false) }
+    // Preserve navigation state across configuration changes (e.g. Z Fold 4 fold/unfold)
+    var currentTab by rememberSaveable { mutableStateOf(NavigationTab.DASHBOARD) }
+    var showInterest by rememberSaveable { mutableStateOf(false) }
+    var recordInitialType by rememberSaveable { mutableStateOf(ExtendedTransactionType.CHI) }
 
     val repository = remember(context) { DashboardRepository(context) }
     val scope = rememberCoroutineScope()
@@ -61,7 +66,15 @@ fun MainAppScreen(
         loadData()
     }
 
-    val bottomBarTab = if (currentTab == NavigationTab.TRANSACTIONS) NavigationTab.ACCOUNTS else currentTab
+    // System BackHandler: prevents accidental app exit when navigating sub-routes or secondary tabs
+    val hasSubRoute = showInterest || currentTab != NavigationTab.DASHBOARD
+    BackHandler(enabled = hasSubRoute) {
+        if (showInterest) {
+            showInterest = false
+        } else if (currentTab != NavigationTab.DASHBOARD) {
+            currentTab = NavigationTab.DASHBOARD
+        }
+    }
 
     FinanceBridgeTheme {
         Scaffold(
@@ -69,8 +82,17 @@ fun MainAppScreen(
             containerColor = FinanceTheme.colors.background,
             bottomBar = {
                 FinanceBottomBar(
-                    currentTab = bottomBarTab,
-                    onTabSelected = { showInterest = false; currentTab = it; if (it == NavigationTab.DASHBOARD) loadData() },
+                    currentTab = currentTab,
+                    onTabSelected = { selected ->
+                        showInterest = false
+                        if (selected == NavigationTab.RECORD) {
+                            recordInitialType = ExtendedTransactionType.CHI
+                        }
+                        currentTab = selected
+                        if (selected == NavigationTab.DASHBOARD) {
+                            loadData()
+                        }
+                    },
                 )
             },
         ) { paddingValues ->
@@ -88,15 +110,27 @@ fun MainAppScreen(
                         errorMessage = errorMessage,
                         onRefresh = { loadData() },
                         onViewAllTransactions = { currentTab = NavigationTab.TRANSACTIONS },
+                        onTransactionClick = { _ ->
+                            // Navigate directly to Transactions screen when clicking a recent item
+                            currentTab = NavigationTab.TRANSACTIONS
+                        },
+                        onQuickRecord = { isIncome ->
+                            recordInitialType = if (isIncome) ExtendedTransactionType.THU else ExtendedTransactionType.CHI
+                            currentTab = NavigationTab.RECORD
+                        },
+                        onOpenAccounts = { currentTab = NavigationTab.ACCOUNTS },
+                        onOpenInterest = { showInterest = true },
+                        onOpenMemory = { currentTab = NavigationTab.MORE },
+                        onOpenSync = { currentTab = NavigationTab.MORE },
                     )
 
-                    NavigationTab.ACCOUNTS -> AccountsScreen(
-                        onViewInterest = { showInterest = true },
-                        onViewTransactions = { currentTab = NavigationTab.TRANSACTIONS },
+                    NavigationTab.TRANSACTIONS -> TransactionsScreen(
+                        context = context,
                     )
 
                     NavigationTab.RECORD -> RecordScreen(
                         context = context,
+                        initialType = recordInitialType,
                         onSaved = { loadData() },
                     )
 
@@ -108,8 +142,9 @@ fun MainAppScreen(
                         context = context,
                     )
 
-                    NavigationTab.TRANSACTIONS -> TransactionsScreen(
-                        context = context,
+                    NavigationTab.ACCOUNTS -> AccountsScreen(
+                        onViewInterest = { showInterest = true },
+                        onViewTransactions = { currentTab = NavigationTab.TRANSACTIONS },
                     )
                 }
             }
