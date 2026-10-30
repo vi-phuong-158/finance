@@ -3,6 +3,7 @@ package vn.phuong.financebridge.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.model.UiTransaction
+import vn.phuong.financebridge.ui.screens.transactions.SmartCategoryStatus
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.CategoryVisuals
 
@@ -22,6 +24,7 @@ fun TransactionRow(
     transaction: UiTransaction,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
+    smartStatus: SmartCategoryStatus? = null,
 ) {
     val icon = CategoryVisuals.icon(transaction.category)
     val iconTintColor = CategoryVisuals.color(transaction.category, FinanceTheme.colors)
@@ -100,6 +103,34 @@ fun TransactionRow(
                             text = "Nghi trùng",
                             style = FinanceTheme.typography.caption.copy(fontSize = 10.sp),
                             color = FinanceTheme.colors.warning,
+                        )
+                    }
+                }
+                if (!transaction.pendingSync && smartStatus != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when (smartStatus) {
+                                        SmartCategoryStatus.REMEMBERED -> FinanceTheme.colors.primary
+                                        SmartCategoryStatus.NEEDS_CHECK -> FinanceTheme.colors.warning
+                                        SmartCategoryStatus.UNCATEGORIZED -> FinanceTheme.colors.expense
+                                    }
+                                ),
+                        )
+                        Text(
+                            text = when (smartStatus) {
+                                SmartCategoryStatus.REMEMBERED -> "Đã ghi nhớ"
+                                SmartCategoryStatus.NEEDS_CHECK -> "Cần kiểm tra"
+                                SmartCategoryStatus.UNCATEGORIZED -> "Chưa phân loại"
+                            },
+                            style = FinanceTheme.typography.caption.copy(fontSize = 10.sp),
+                            color = FinanceTheme.colors.textSecondary,
                         )
                     }
                 }

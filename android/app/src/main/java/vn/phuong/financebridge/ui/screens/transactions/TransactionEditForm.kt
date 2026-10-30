@@ -10,10 +10,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +31,6 @@ import vn.phuong.financebridge.EditGate
 import vn.phuong.financebridge.EditGuard
 import vn.phuong.financebridge.ManualOutbox
 import vn.phuong.financebridge.TransactionEditInput
-import vn.phuong.financebridge.ui.components.CategorySuggestionCard
 import vn.phuong.financebridge.ui.data.queueMutation
 import vn.phuong.financebridge.ui.data.supersedeEdit
 import vn.phuong.financebridge.ui.model.UiTransaction
@@ -96,16 +98,72 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
                         }, shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
                     }
                 }
+                if (suggestion != null && !hideSuggestion) {
+                    val isRemembered = suggestion.rule.level in setOf("STRONG", "PRESELECT")
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = FinanceTheme.shapes.large,
+                        color = FinanceTheme.colors.primaryContainer.copy(alpha = 0.45f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, FinanceTheme.colors.primary.copy(alpha = 0.2f)),
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Danh mục đề xuất", style = FinanceTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(FinanceTheme.shapes.pill)
+                                        .background(if (isRemembered) FinanceTheme.colors.primary.copy(alpha = 0.15f) else FinanceTheme.colors.surface)
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                ) {
+                                    Text(
+                                        text = if (isRemembered) "Đã ghi nhớ" else "Gợi ý từ lần phân loại trước",
+                                        style = FinanceTheme.typography.caption.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                                        color = if (isRemembered) FinanceTheme.colors.primary else FinanceTheme.colors.textSecondary,
+                                    )
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                val tint = CategoryVisuals.color(suggestion.category, FinanceTheme.colors)
+                                Box(Modifier.size(36.dp).background(tint.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) {
+                                    Icon(CategoryVisuals.icon(suggestion.category), null, tint = tint, modifier = Modifier.size(20.dp))
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text(suggestion.category, style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
+                                    Text(suggestion.detail, style = FinanceTheme.typography.caption, color = FinanceTheme.colors.textSecondary)
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { updateFields(currentFields().copy(category = suggestion.category)) },
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 44.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (category == suggestion.category) FinanceTheme.colors.primary else FinanceTheme.colors.primaryContainer,
+                                        contentColor = if (category == suggestion.category) FinanceTheme.colors.onPrimary else FinanceTheme.colors.primary,
+                                    ),
+                                ) {
+                                    Text(if (category == suggestion.category) "✓ Đã chọn" else "Xác nhận")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        if (category == suggestion.category && category != transaction.category) {
+                                            updateFields(currentFields().copy(category = transaction.category))
+                                        }
+                                        hideSuggestion = true
+                                    },
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 44.dp),
+                                ) {
+                                    Text("Đổi danh mục")
+                                }
+                            }
+                        }
+                    }
+                }
                 Text("Danh mục", style = FinanceTheme.typography.titleMedium)
                 BoxWithConstraints {
                     val columns = CategoryVisuals.columns(maxWidth.value.toInt())
                     val filtered = categories.filter { it.type == type || it.type == "BOTH" }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (suggestion != null && filtered.any { it.name == suggestion.category }) {
-                            Text("Đề xuất", style = FinanceTheme.typography.caption)
-                            CategoryTile(suggestion.category, category == suggestion.category, { updateFields(currentFields().copy(category = suggestion.category)) }, Modifier.fillMaxWidth())
-                        }
-                        filtered.filterNot { it.name == suggestion?.category }.chunked(columns).forEach { row ->
+                        filtered.chunked(columns).forEach { row ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 row.forEach { choice ->
                                     CategoryTile(choice.name, category == choice.name, { updateFields(currentFields().copy(category = choice.name)) }, Modifier.weight(1f))
@@ -115,12 +173,6 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
                         }
                     }
                 }
-                if (suggestion != null && !hideSuggestion) CategorySuggestionCard(suggestion, applied = category == suggestion.category,
-                    onApply = { updateFields(currentFields().copy(category = suggestion.category)) },
-                    onDismiss = {
-                        if (category == suggestion.category && category != transaction.category) updateFields(currentFields().copy(category = transaction.category))
-                        hideSuggestion = true
-                    })
                 OutlinedTextField(note, { updateFields(currentFields().copy(note = it)) }, label = { Text("Ghi chú") })
                 Row { Checkbox(checked = excluded, onCheckedChange = { updateFields(currentFields().copy(excluded = it)) }); Text("Không tính vào báo cáo", modifier = Modifier.padding(top = 12.dp)) }
                 if (category == "Chuyển nội bộ") Text("Chuyển nội bộ luôn được loại khỏi tổng thu chi.", style = FinanceTheme.typography.caption)

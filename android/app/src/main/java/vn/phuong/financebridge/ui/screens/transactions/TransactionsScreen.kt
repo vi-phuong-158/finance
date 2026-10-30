@@ -199,7 +199,13 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
             Text("Đang hiển thị ${rows.size}/$total giao dịch", style = FinanceTheme.typography.caption)
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 56.dp)) {
                 items(rows, key = { it.id }) { transaction ->
-                    FinanceCard(contentPadding = 8.dp) { TransactionRow(transaction, onClick = { selectedId = transaction.id; selected = transaction; expandedDescription = false }) }
+                    FinanceCard(contentPadding = 8.dp) {
+                        TransactionRow(
+                            transaction = transaction,
+                            smartStatus = TransactionSmartStatus.derive(transaction, memory),
+                            onClick = { selectedId = transaction.id; selected = transaction; expandedDescription = false },
+                        )
+                    }
                 }
                 item {
                     if (nextCursor != null) SecondaryButton(text = if (loading) "Đang tải…" else "Xem thêm", enabled = !loading,
