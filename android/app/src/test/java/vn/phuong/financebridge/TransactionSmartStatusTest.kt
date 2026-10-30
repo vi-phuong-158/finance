@@ -53,4 +53,16 @@ class TransactionSmartStatusTest {
             source = "BANK_NOTIFICATION", revision = "0", memoryKey = "ACCOUNT:99990000111122223333444455556666")
         assertEquals(SmartCategoryStatus.NEEDS_CHECK, TransactionSmartStatus.derive(t, memory))
     }
+
+    @Test
+    fun moneyLoverTransactionYieldsRemembered() {
+        val t = UiTransaction.create("t-ml", TransactionType.CHI, 45000, "Phở", category = "Ăn uống", source = "MONEYLOVER", revision = "0")
+        assertEquals(SmartCategoryStatus.REMEMBERED, TransactionSmartStatus.derive(t, null))
+    }
+
+    @Test
+    fun internalTransferCategoryYieldsNullStatus() {
+        val t = UiTransaction.create("t-it", TransactionType.CHI, 1000000, "Chuyển tiền tiết kiệm", category = "Chuyển nội bộ", source = "BANK_NOTIFICATION")
+        assertNull(TransactionSmartStatus.derive(t, memory))
+    }
 }

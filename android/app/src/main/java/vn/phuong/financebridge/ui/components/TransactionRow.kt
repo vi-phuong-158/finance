@@ -119,7 +119,7 @@ fun TransactionRow(
                         )
                     }
                 }
-                if (!transaction.pendingSync && !transaction.blocked && smartStatus != null) {
+                if (!transaction.pendingSync && !transaction.blocked && smartStatus != null && smartStatus != SmartCategoryStatus.REMEMBERED) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),

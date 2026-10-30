@@ -11,11 +11,14 @@ enum class SmartCategoryStatus {
 }
 
 object TransactionSmartStatus {
-    fun derive(transaction: UiTransaction, memory: CategoryMemoryIndex?): SmartCategoryStatus {
+    fun derive(transaction: UiTransaction, memory: CategoryMemoryIndex?): SmartCategoryStatus? {
+        if (transaction.category == "Chuyển nội bộ") {
+            return null
+        }
         if (transaction.category == CategoryMemory.UNCATEGORIZED) {
             return SmartCategoryStatus.UNCATEGORIZED
         }
-        if (transaction.source == "MANUAL" || transaction.revision != "0") {
+        if (transaction.source == "MANUAL" || transaction.source == "MONEYLOVER" || transaction.revision != "0") {
             return SmartCategoryStatus.REMEMBERED
         }
         val suggestion = CategoryMemory.suggest(memory, transaction.memoryKey, transaction.type.name)
