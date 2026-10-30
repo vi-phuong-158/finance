@@ -197,7 +197,7 @@ export function readMemoryCommands(rows: unknown[][] | null): MemoryCommand[] {
 }
 
 type Entry = { at: string; category: string; order: string };
-export function buildMemoryIndex(observations: Observation[], commands: MemoryCommand[]): MemoryRule[] {
+export function buildMemoryIndex(observations: Observation[], commands: MemoryCommand[], ownAccountDigests?: Set<string>): MemoryRule[] {
   const rules = new Map<string, { identity: Identity | null; type: 'THU' | 'CHI'; entries: Entry[] }>();
   const rule = (key: string, type: 'THU' | 'CHI', identity: Identity | null) => {
     const id = `${key}|${type}`, existing = rules.get(id);
@@ -206,13 +206,17 @@ export function buildMemoryIndex(observations: Observation[], commands: MemoryCo
     rules.set(id, created);
     return created;
   };
-  for (const o of observations) rule(o.identity.key, o.type, o.identity).entries.push({ at: o.at, category: o.category, order: `1|${o.transactionId}` });
+  for (const o of observations) {
+    if (o.identity.type === 'ACCOUNT' && ownAccountDigests?.has(o.identity.key.slice('ACCOUNT:'.length))) continue;
+    rule(o.identity.key, o.type, o.identity).entries.push({ at: o.at, category: o.category, order: `1|${o.transactionId}` });
+  }
   const sortedCommands = [...commands].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.requestId.localeCompare(b.requestId));
   // A command replaces history up to and including its own timestamp; later choices still count.
   const cut = (r: { entries: Entry[] }, at: string) => { r.entries = r.entries.filter((e) => e.at > at); };
   for (const c of sortedCommands) {
     const at = new Date(c.createdAt).toISOString();
     if (c.action === 'RESET_ALL') { for (const r of rules.values()) cut(r, at); continue; }
+    if (c.identityKey.startsWith('ACCOUNT:') && ownAccountDigests?.has(c.identityKey.slice('ACCOUNT:'.length))) continue;
     const r = rule(c.identityKey, c.type as 'THU' | 'CHI', null);
     cut(r, at);
     if (c.action === 'SET') r.entries.push(...Array.from({ length: SET_WEIGHT }, (_, i) => ({ at, category: c.category, order: `0|${c.requestId}|${i}` })));
@@ -225,11 +229,31 @@ export function buildMemoryIndex(observations: Observation[], commands: MemoryCo
     const identityType = key.slice(0, key.indexOf(':')) as IdentityType;
     const counts = new Map<string, { count: number; last: number }>();
     window.forEach((e, i) => counts.set(e.category, { count: (counts.get(e.category)?.count ?? 0) + 1, last: i }));
-    const ranked = [...counts].sort((a, b) => b[1].count - a[1].count || b[1].last - a[1].last);
-    const [category, { count }] = ranked[0], second = ranked[1]?.[1].count ?? 0;
-    const confidence = Math.round(count / window.length * TIER_FACTOR[identityType] * 100) / 100;
-    const level: MemoryLevel = window.length === 1 ? 'HINT' : count < 2 || count === second || confidence < 0.6 ? 'AMBIGUOUS'
-      : window.length >= 4 && confidence >= 0.8 ? 'STRONG' : 'PRESELECT';
+
+    let category: string;
+    let count: number;
+    let confidence: number;
+    let level: MemoryLevel;
+
+    if (identityType === 'ACCOUNT') {
+      // Tier 1 (ACCOUNT): the most recent explicit choice wins; minimum level is PRESELECT from 1 entry;
+      // STRONG when >= 4 entries and the newest category accounts for >= 80%.
+      category = window.at(-1)!.category;
+      count = counts.get(category)!.count;
+      confidence = Math.round((count / window.length) * TIER_FACTOR[identityType] * 100) / 100;
+      level = window.length >= 4 && confidence >= 0.8 ? 'STRONG' : 'PRESELECT';
+    } else {
+      // Tier 2 (COUNTERPARTY) and Tier 3 (DESCRIPTION): frequency-first ranking with recency tiebreak.
+      const ranked = [...counts].sort((a, b) => b[1].count - a[1].count || b[1].last - a[1].last);
+      const [topCategory, { count: topCount }] = ranked[0];
+      const second = ranked[1]?.[1].count ?? 0;
+      category = topCategory;
+      count = topCount;
+      confidence = Math.round((count / window.length) * TIER_FACTOR[identityType] * 100) / 100;
+      level = window.length === 1 ? 'HINT' : count < 2 || count === second || confidence < 0.6 ? 'AMBIGUOUS'
+        : window.length >= 4 && confidence >= 0.8 ? 'STRONG' : 'PRESELECT';
+    }
+
     // A rule created only by SET has no observed identity; its key is the safest available label.
     const label = r.identity?.label ?? key.slice(key.indexOf(':') + 1).replace(/^[a-f0-9]{32}$/, 'Tài khoản');
     result.push({ key, identityType, label, type: r.type, category, count, total: window.length, confidence, level,

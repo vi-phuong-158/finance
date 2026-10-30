@@ -134,4 +134,38 @@ class CategoryMemoryTest {
         assertEquals("BLOCKED", manualSyncState(503, "CATEGORY_MEMORY_MIGRATION_REQUIRED"))
         assertEquals("BLOCKED", manualSyncState(409, "IDEMPOTENCY_CONFLICT"))
     }
+
+    @Test fun scenarioGOfflineCachedAccountRuleSuggestsAndPreselects() {
+        val (store, file) = tempStore()
+        val accountKey = "ACCOUNT:0123456789abcdef0123456789abcdef"
+        val saved = index(
+            rule("PRESELECT", 1, 1, key = accountKey, category = "Ăn uống"),
+            rule("STRONG", 4, 5, key = "ACCOUNT:fedcba9876543210fedcba9876543210", category = "Gia đình")
+        )
+        store.apply(Result.success(saved))
+        val offlineStore = CategoryMemoryStore(file)
+        val offlineState = offlineStore.apply(Result.failure(IllegalStateException("offline")))
+        assertTrue(offlineState.offline)
+        assertFalse(offlineState.disabled)
+
+        val preselectSuggestion = CategoryMemory.suggest(offlineState.index, accountKey, "CHI")
+        assertNotNull(preselectSuggestion)
+        assertTrue(preselectSuggestion!!.preselect)
+        assertEquals("Ăn uống", preselectSuggestion.category)
+
+        val strongSuggestion = CategoryMemory.suggest(offlineState.index, "ACCOUNT:fedcba9876543210fedcba9876543210", "CHI")
+        assertNotNull(strongSuggestion)
+        assertTrue(strongSuggestion!!.preselect)
+        assertEquals("Gia đình", strongSuggestion.category)
+    }
+
+    @Test fun scenarioHCorruptMemoryCacheFailsClosedWithoutCrashOrWrongPreselect() {
+        val (store, file) = tempStore()
+        file.writeText("corrupt\tinvalid\tcategory\tdata\n")
+        val loaded = store.load()
+        assertNull(loaded)
+        val accountKey = "ACCOUNT:0123456789abcdef0123456789abcdef"
+        val suggestion = CategoryMemory.suggest(loaded, accountKey, "CHI")
+        assertNull(suggestion)
+    }
 }
