@@ -1,7 +1,12 @@
 package vn.phuong.financebridge.ui.screens.transactions
 
 import android.content.Context
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -9,8 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.Icon
-import vn.phuong.financebridge.ui.util.CategoryVisuals
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,7 @@ import vn.phuong.financebridge.ui.data.queueMutation
 import vn.phuong.financebridge.ui.data.supersedeEdit
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
+import vn.phuong.financebridge.ui.util.CategoryVisuals
 import java.util.UUID
 
 sealed interface EditStart {
@@ -92,22 +96,17 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
                 }
                 Text("Danh mục", style = FinanceTheme.typography.titleMedium)
                 BoxWithConstraints {
-                    val columns = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 360) 3 else 4
+                    val columns = CategoryVisuals.columns(maxWidth.value.toInt())
                     val filtered = categories.filter { it.type == type || it.type == "BOTH" }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (suggestion != null && filtered.any { it.name == suggestion.category }) {
                             Text("Đề xuất", style = FinanceTheme.typography.caption)
-                            FilterChip(selected = category == suggestion.category, onClick = { category = suggestion.category },
-                                label = { Text(suggestion.category) },
-                                leadingIcon = { Icon(CategoryVisuals.icon(suggestion.category), null, tint = CategoryVisuals.color(suggestion.category, FinanceTheme.colors), modifier = Modifier.size(18.dp)) })
+                            CategoryTile(suggestion.category, category == suggestion.category, { category = suggestion.category }, Modifier.fillMaxWidth())
                         }
                         filtered.filterNot { it.name == suggestion?.category }.chunked(columns).forEach { row ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 row.forEach { choice ->
-                                    FilterChip(selected = category == choice.name, onClick = { category = choice.name },
-                                        label = { Text(choice.name, maxLines = 2) },
-                                        leadingIcon = { Icon(CategoryVisuals.icon(choice.name), null, tint = CategoryVisuals.color(choice.name, FinanceTheme.colors), modifier = Modifier.size(18.dp)) },
-                                        modifier = Modifier.weight(1f))
+                                    CategoryTile(choice.name, category == choice.name, { category = choice.name }, Modifier.weight(1f))
                                 }
                                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                             }
@@ -155,5 +154,22 @@ fun TransactionEditForm(context: Context, transaction: UiTransaction, categories
     }
     if (embedded) form() else Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
         Surface(shape = FinanceTheme.shapes.xLarge) { form() }
+    }
+}
+
+@Composable
+private fun CategoryTile(name: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val tint = CategoryVisuals.color(name, FinanceTheme.colors)
+    Surface(onClick = onClick, modifier = modifier.heightIn(min = 96.dp), shape = FinanceTheme.shapes.medium,
+        color = if (selected) FinanceTheme.colors.primaryContainer else FinanceTheme.colors.surface,
+        border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, FinanceTheme.colors.primary) else null) {
+        Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(36.dp).background(tint.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(CategoryVisuals.icon(name), null, tint = tint, modifier = Modifier.size(22.dp))
+            }
+            Text(name, style = FinanceTheme.typography.caption, maxLines = 2, minLines = 2,
+                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        }
     }
 }

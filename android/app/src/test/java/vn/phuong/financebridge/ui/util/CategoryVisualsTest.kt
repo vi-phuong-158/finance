@@ -5,6 +5,11 @@ import androidx.compose.material.icons.rounded.Receipt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
+import org.junit.Assert.assertTrue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import vn.phuong.financebridge.ui.theme.*
+import kotlin.math.pow
 
 class CategoryVisualsTest {
     // Source: vercel/lib/categories.ts. Add new registry categories here when that list changes.
@@ -29,5 +34,40 @@ class CategoryVisualsTest {
             "Hóa đơn điện" to "Hoá đơn điện", "Hoa\u0301 đơn điện" to "Hoá đơn điện").forEach { (alias, canonical) ->
             assertEquals(CategoryVisuals.icon(canonical), CategoryVisuals.icon(alias))
         }
+    }
+    @Test fun categoryPalettesCoverEveryNameWithoutReusingMoneySemantics() {
+        for (palette in listOf(LightCategoryPalette, DarkCategoryPalette)) {
+            assertEquals(10, palette.all.toSet().size)
+            categories.forEach { name ->
+                val color = CategoryVisuals.color(name, palette)
+                assertTrue(name, color in palette.all)
+                assertNotEquals(name, IncomeGreen, color)
+                assertNotEquals(name, ExpenseRed, color)
+            }
+        }
+    }
+
+    @Test fun categoryIconContrastAgainstItsTintIsAtLeastThreeInBothThemes() {
+        fun luminance(color: Color): Double {
+            fun channel(c: Float): Double = if (c <= 0.04045f) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
+            return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
+        }
+        for ((palette, surfaces) in listOf(LightCategoryPalette to listOf(SurfaceLight, Primary100),
+            DarkCategoryPalette to listOf(SurfaceDark, SurfaceElevatedDark))) {
+            palette.all.forEach { icon -> surfaces.forEach { surface ->
+                val tint = icon.copy(alpha = 0.12f).compositeOver(surface)
+                val a = luminance(icon); val b = luminance(tint)
+                assertTrue("contrast must be >=3:1", (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05) >= 3.0)
+            } }
+        }
+    }
+
+    @Test fun gridUsesAvailableWidthIncludingFoldAndExpandedBreakpoints() {
+        assertEquals(3, CategoryVisuals.columns(304))
+        assertEquals(3, CategoryVisuals.columns(344))
+        assertEquals(4, CategoryVisuals.columns(360))
+        assertEquals(4, CategoryVisuals.columns(412))
+        assertEquals(5, CategoryVisuals.columns(600))
+        assertEquals(6, CategoryVisuals.columns(690))
     }
 }

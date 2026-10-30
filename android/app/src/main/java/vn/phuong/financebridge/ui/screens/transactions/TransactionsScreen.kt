@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -47,7 +46,7 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
     var nextCursor by remember { mutableStateOf<String?>(null) }
     var revision by remember { mutableStateOf(0) }
     var rows by remember { mutableStateOf<List<UiTransaction>>(emptyList()) }
-    var selected by remember { mutableStateOf<UiTransaction?>(null) }
+    var selected by rememberSaveable(stateSaver = TransactionSaver) { mutableStateOf<UiTransaction?>(null) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var editRequested by rememberSaveable { mutableStateOf(false) }
     var expandedDescription by rememberSaveable { mutableStateOf(false) }
@@ -57,7 +56,7 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
     var total by remember { mutableStateOf(0) }
     var categories by remember { mutableStateOf<List<CategoryChoice>>(emptyList()) }
     var editingEnabled by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<UiTransaction?>(null) }
+    var editing by rememberSaveable(stateSaver = TransactionSaver) { mutableStateOf<UiTransaction?>(null) }
     var opening by remember { mutableStateOf(false) }
     var savingEdit by remember { mutableStateOf(false) }
     var savedMessage by remember { mutableStateOf<String?>(null) }
@@ -82,11 +81,15 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
         val transaction = selected
         if (transaction != null && editRequested && editing == null && !opening) {
             opening = true
-            when (val start = prepareEdit(context, api, transaction)) {
-                is EditStart.Ready -> { start.categories?.let { categories = it }; editing = start.transaction }
-                is EditStart.Refused -> { savedMessage = start.message; editRequested = false }
+            try {
+                when (val start = prepareEdit(context, api, transaction)) {
+                    is EditStart.Ready -> { start.categories?.let { categories = it }; editing = start.transaction }
+                    is EditStart.Refused -> { savedMessage = start.message; editRequested = false }
+                }
+            } finally {
+                // Closing the sheet cancels this effect, including its network request.
+                opening = false
             }
-            opening = false
         }
     }
     LaunchedEffect(revision) {
@@ -177,7 +180,8 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
         }
     }
     selected?.let { transaction ->
-        ModalBottomSheet(onDismissRequest = { if (!savingEdit) { selected = null; selectedId = null; editing = null; editRequested = false } }) {
+        val sheetState = rememberModalBottomSheetState(confirmValueChange = { !savingEdit || it != SheetValue.Hidden })
+        ModalBottomSheet(sheetState = sheetState, onDismissRequest = { if (!savingEdit) { selected = null; selectedId = null; editing = null; editRequested = false } }) {
             if (editing != null) {
                 TransactionEditForm(context, editing!!, categories, memory, embedded = true, onSavingChanged = { savingEdit = it },
                     onDismiss = { editing = null; editRequested = false }, onQueued = {

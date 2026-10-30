@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import vn.phuong.financebridge.ui.theme.CategoryPalette
 import vn.phuong.financebridge.ui.theme.FinanceColors
 import java.text.Normalizer
 import java.util.Locale
@@ -37,11 +38,27 @@ object CategoryVisuals {
         else -> Icons.Rounded.Receipt
     }
 
-    fun color(category: String, colors: FinanceColors): Color = when (icon(category)) {
-        Icons.Rounded.Payments, Icons.Rounded.AccountBalance -> colors.income
-        Icons.Rounded.Restaurant, Icons.Rounded.LocalCafe, Icons.Rounded.CardGiftcard -> colors.expense
-        Icons.Rounded.LocalGasStation, Icons.Rounded.LocalTaxi, Icons.Rounded.DirectionsCar -> colors.info
-        Icons.Rounded.HelpOutline, Icons.Rounded.MoreHoriz, Icons.Rounded.Receipt -> colors.textSecondary
-        else -> colors.primary
+    fun color(category: String, colors: FinanceColors): Color = color(category, colors.categories)
+
+    fun color(category: String, palette: CategoryPalette): Color = with(palette) {
+        when (icon(category)) {
+            Icons.Rounded.Restaurant, Icons.Rounded.LocalCafe -> food
+            Icons.Rounded.LocalGasStation, Icons.Rounded.LocalTaxi, Icons.Rounded.DirectionsCar -> travel
+            Icons.Rounded.ElectricBolt, Icons.Rounded.Language -> bills
+            Icons.Rounded.ShoppingCart, Icons.Rounded.Person -> shopping
+            Icons.Rounded.ChildCare, Icons.Rounded.Home -> family
+            Icons.Rounded.MedicalServices, Icons.Rounded.Face -> health
+            Icons.Rounded.Security, Icons.Rounded.Percent, Icons.Rounded.AccountBalance -> finance
+            Icons.Rounded.CardGiftcard, Icons.Rounded.SportsEsports -> leisure
+            Icons.Rounded.Payments -> earnings
+            else -> neutral
+        }
+    }
+
+    fun columns(widthDp: Int): Int = when {
+        widthDp < 360 -> 3
+        widthDp < 600 -> 4
+        widthDp < 690 -> 5
+        else -> 6
     }
 }

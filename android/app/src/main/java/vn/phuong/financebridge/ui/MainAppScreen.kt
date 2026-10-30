@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import vn.phuong.financebridge.ManualSyncWorker
 import vn.phuong.financebridge.ui.components.FinanceBottomBar
 import vn.phuong.financebridge.ui.components.NavigationTab
+import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.screens.accounts.AccountsScreen
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardRepository
@@ -34,7 +35,7 @@ fun MainAppScreen(
 ) {
     // Preserve navigation state across configuration changes (e.g. Z Fold 4 fold/unfold)
     var currentTab by rememberSaveable { mutableStateOf(NavigationTab.DASHBOARD) }
-    var openTransaction by remember { mutableStateOf<vn.phuong.financebridge.ui.model.UiTransaction?>(null) }
+    var openTransaction by remember { mutableStateOf<UiTransaction?>(null) }
     var openTransactionId by rememberSaveable { mutableStateOf<String?>(null) }
     var showInterest by rememberSaveable { mutableStateOf(false) }
     var recordInitialType by rememberSaveable { mutableStateOf(ExtendedTransactionType.CHI) }

@@ -60,6 +60,24 @@ val TextMutedDark = Color(0xFF86958C)
 val ShadowAmbientDark = Color(0x1F000000)
 val ShadowSpotDark = Color(0x2E000000)
 
+// Category hues are independent of income/expense semantics. Icons use a 12% tint surface.
+@Immutable
+data class CategoryPalette(
+    val food: Color, val travel: Color, val bills: Color, val shopping: Color, val family: Color,
+    val health: Color, val finance: Color, val leisure: Color, val earnings: Color, val neutral: Color,
+) {
+    val all get() = listOf(food, travel, bills, shopping, family, health, finance, leisure, earnings, neutral)
+}
+
+val LightCategoryPalette = CategoryPalette(
+    Color(0xFF9B4D16), Color(0xFF1966A3), Color(0xFF6250A1), Color(0xFF9E3D7A), Color(0xFF916517),
+    Color(0xFF246F75), Color(0xFF4C57A1), Color(0xFF894699), Color(0xFF466C32), Color(0xFF596570),
+)
+val DarkCategoryPalette = CategoryPalette(
+    Color(0xFFFFB77E), Color(0xFF91C9F5), Color(0xFFC7B6FF), Color(0xFFF7ADD9), Color(0xFFEACB83),
+    Color(0xFF8CD6DA), Color(0xFFADB9FF), Color(0xFFE3B1F2), Color(0xFFB1D68D), Color(0xFFBAC8D3),
+)
+
 @Immutable
 data class FinanceColors(
     val primary: Color,
@@ -83,6 +101,7 @@ data class FinanceColors(
     val shadowAmbient: Color,
     val shadowSpot: Color,
     val isDark: Boolean,
+    val categories: CategoryPalette = if (isDark) DarkCategoryPalette else LightCategoryPalette,
 )
 
 val LocalFinanceColors = staticCompositionLocalOf {
