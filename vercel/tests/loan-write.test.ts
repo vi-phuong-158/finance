@@ -73,7 +73,7 @@ test('loan create/disburse/principal/interest/update use native sources, preserv
   assert.equal(result.principal, 6000000);
   assert.equal(result.outstandingPrincipal, 5000000);
   assert.equal(result.paidInterest, 25000);
-  assert.equal(result.currentInterest, 45000); // 4M at 12% and 1M at 6%, from next 25th.
+  assert.equal(result.currentInterest, Math.round((4000000 * .12 + 1000000 * .06) * 30 / 365)); // Actual days Apr 25–May 25.
   assert.equal(snapshot.audit.length, 6);
   assert.equal(snapshot.interest.loans[2][1], 'Updated synthetic borrower');
   assert.equal(snapshot.interest.payments.length, 3);

@@ -1,4 +1,4 @@
-export const INTEREST_RULE = 'MONTHLY_25_V1';
+export const INTEREST_RULE = 'DAILY_ACT365_25_V1';
 export type Loan = { id: string; name: string; principal: number };
 export type Disbursement = { id: string; loanId: string; principal: number; annualRate: number; date: string; maturity: string | null };
 export type LoanPayment = { row: number; loanId: string; type: 'Thu gốc' | 'Thu lãi'; amount: number; date: string };
@@ -54,31 +54,36 @@ export function buildInterest(data: InterestData, asOf: string) {
       const disbursed = moneySum(tranches.filter((t) => t.date <= p.date).map((t) => t.principal));
       if (received > disbursed) throw new Error('INTEREST_OVERPAYMENT');
     }
-    const amountForPeriod = (from: string) => {
-      const to = nextPeriod(from);
-      const repaid = moneySum(principalPayments.filter((p) => p.date <= from).map((p) => p.amount));
+    const amountBetween = (from: string, to: string) => {
       let previous = 0;
       return tranches.reduce((sum, tranche) => {
-        // FIFO allocates repayments to the oldest disbursement, preserving each maturity.
-        const remaining = Math.max(0, tranche.principal - Math.max(0, repaid - previous));
+        const olderPrincipal = previous;
         previous += tranche.principal;
-        const eligible = firstPeriod(tranche.date) <= from && (!tranche.maturity || to <= tranche.maturity);
-        return sum + (eligible ? remaining * tranche.annualRate / 12 : 0);
+        if (tranche.date > asOf) return sum;
+        const lo = tranche.date > from ? tranche.date : from;
+        const hi = tranche.maturity && tranche.maturity < to ? tranche.maturity : to;
+        if (hi <= lo) return sum;
+        // Closing balance: a principal receipt reduces interest on its value date.
+        // Split at receipt dates; same-day receipts share one balance, even if rows are unsorted.
+        const cuts = [...new Set([lo, hi, ...principalPayments.map((p) => p.date)
+          .filter((date) => date > lo && date < hi)])].sort();
+        let interest = 0;
+        for (let i = 0; i < cuts.length - 1; i++) {
+          const repaid = moneySum(principalPayments.filter((p) => p.date <= cuts[i]).map((p) => p.amount));
+          const remaining = Math.max(0, tranche.principal - Math.max(0, repaid - olderPrincipal));
+          interest += remaining * tranche.annualRate * ((Date.parse(cuts[i + 1]) - Date.parse(cuts[i])) / 86400000) / 365;
+        }
+        return sum + interest;
       }, 0);
     };
     const monthIndex = (date: string) => Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7));
     const completedPeriods = Math.max(...tranches.map((t) => Math.max(0,
-      monthIndex(periodStart(t.maturity && t.maturity < asOf ? t.maturity : asOf)) - monthIndex(firstPeriod(t.date)))));
-    let accrued = 0, iterations = 0;
-    for (let from = firstPeriod(tranches[0].date); from < start; from = nextPeriod(from)) {
-      if (++iterations > 1200) throw new Error('INTEREST_SOURCE_LIMIT_EXCEEDED');
-      accrued += amountForPeriod(from);
-    }
-    const accruedInterest = round(accrued);
+      monthIndex(periodStart(t.maturity && t.maturity < asOf ? t.maturity : asOf)) - monthIndex(periodStart(t.date)))));
+    const accruedInterest = round(amountBetween(tranches[0].date, start));
     const paidInterest = moneySum(payments.filter((p) => p.type === 'Thu lãi').map((p) => p.amount));
     const repaidPrincipal = moneySum(principalPayments.map((p) => p.amount));
     const outstandingPrincipal = moneySum(tranches.filter((t) => t.date <= asOf).map((t) => t.principal)) - repaidPrincipal;
-    const currentInterest = round(amountForPeriod(start));
+    const currentInterest = round(amountBetween(start, end));
     const advanceInterest = Math.max(0, paidInterest - accruedInterest);
     const maturities = tranches.map((t) => t.maturity).filter((d): d is string => d !== null);
     const maturity = maturities.length === tranches.length ? maturities.sort().at(-1)! : null;

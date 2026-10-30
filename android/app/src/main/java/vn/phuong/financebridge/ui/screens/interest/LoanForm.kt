@@ -52,7 +52,7 @@ fun LoanForm(context: Context, operation: LoanOperation, loan: InterestLoan?, as
                     OutlinedTextField(rate, { rate = it }, label = { Text("Lãi suất năm (%)") }, singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                     OutlinedTextField(maturity, { maturity = it }, label = { Text("Đáo hạn dd/MM/yyyy (có thể trống)") }, singleLine = true)
-                    Text("Giữ kỳ tháng 25–25. Giải ngân giữa kỳ bắt đầu tính từ ngày 25 kế tiếp.", style = FinanceTheme.typography.caption)
+                    Text("Chốt lãi ngày 25. Giải ngân tính từ ngày nhận nợ; trả gốc giảm lãi từ ngày nhận tiền, theo số ngày thực tế/365.", style = FinanceTheme.typography.caption)
                 }
                 OutlinedTextField(note, { note = it }, label = { Text("Ghi chú") })
                 error?.let { Text(it, color = FinanceTheme.colors.expense) }
