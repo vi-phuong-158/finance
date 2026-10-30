@@ -8,6 +8,7 @@ import org.json.JSONObject
 
 data class QueuedMutation(val id: String, val payload: String, val endpoint: String)
 data class BlockedMutation(val id: String, val endpoint: String, val payload: String?, val targetId: String?, val lastError: String?, val createdAt: Long)
+data class ActiveEditMutation(val requestId: String, val targetId: String, val state: String, val payload: String?, val lastError: String?)
 
 class ManualOutbox(context: Context) : SQLiteOpenHelper(context.applicationContext, "finance_manual_outbox.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
@@ -96,6 +97,19 @@ class ManualOutbox(context: Context) : SQLiteOpenHelper(context.applicationConte
     fun activeEdit(transactionId: String): QueuedEdit? = readableDatabase.rawQuery(
         "SELECT request_id,state,last_error FROM manual_outbox WHERE target_id=? AND state IN ('PENDING','SYNCING','BLOCKED') ORDER BY created_at DESC LIMIT 1",
         arrayOf(transactionId)).use { cursor -> if (cursor.moveToFirst()) QueuedEdit(cursor.getString(0), cursor.getString(1), cursor.getString(2)) else null }
+
+    fun activeEdits(): List<ActiveEditMutation> = readableDatabase.rawQuery(
+        "SELECT request_id,target_id,state,payload,last_error FROM manual_outbox WHERE endpoint='transaction-edit' AND state IN ('PENDING','SYNCING','BLOCKED') ORDER BY created_at",
+        null).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                val target = cursor.getString(1)
+                    ?: runCatching { cursor.getString(3)?.let { JSONObject(it).getString("transactionId") } }.getOrNull()
+                    ?: continue
+                add(ActiveEditMutation(cursor.getString(0), target, cursor.getString(2), cursor.getString(3), cursor.getString(4)))
+            }
+        }
+    }
 
     fun latestSyncedEdit(transactionId: String): String? = readableDatabase.rawQuery(
         "SELECT request_id FROM manual_outbox WHERE target_id=? AND state='SYNCED' ORDER BY created_at DESC LIMIT 1",

@@ -99,4 +99,18 @@ class ManualOutboxTest {
         outbox.enqueueRequest(b, edit(b), "transaction-edit")
         assertEquals(QueuedEdit(b, "PENDING", null), outbox.activeEdit(tx))
     }
+
+    @Test fun activeEditsReturnsPendingSyncingAndBlockedEdits() {
+        outbox.enqueueRequest(a, edit(a, target = "tx-1"), "transaction-edit")
+        outbox.enqueueRequest(b, edit(b, target = "tx-2"), "transaction-edit")
+        outbox.update(b, "BLOCKED", "EDIT_CONFLICT")
+        outbox.enqueueRequest(c, JSONObject().put("requestId", c).toString(), "manual-transaction")
+
+        val edits = outbox.activeEdits()
+        assertEquals(2, edits.size)
+        assertEquals("tx-1", edits[0].targetId)
+        assertEquals("PENDING", edits[0].state)
+        assertEquals("tx-2", edits[1].targetId)
+        assertEquals("BLOCKED", edits[1].state)
+    }
 }

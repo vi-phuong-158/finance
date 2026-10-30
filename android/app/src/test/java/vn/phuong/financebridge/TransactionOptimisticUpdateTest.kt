@@ -2,10 +2,16 @@ package vn.phuong.financebridge
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.model.UiTransaction
+import vn.phuong.financebridge.ui.screens.transactions.PendingEditState
 import vn.phuong.financebridge.ui.screens.transactions.TransactionOptimisticUpdate
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class TransactionOptimisticUpdateTest {
     private fun sampleTransaction(id: String = "tx-1", type: TransactionType = TransactionType.CHI) =
         UiTransaction.create(
@@ -83,5 +89,95 @@ class TransactionOptimisticUpdateTest {
 
         assertEquals(row3, result[2])
         assertFalse(result[2].pendingSync)
+    }
+
+    @Test
+    fun parseEditPayloadParsesValidJsonAndReturnsNullForInvalid() {
+        val json = """{"type":"CHI","category":"Ăn uống","note":"Phở","excluded":false}"""
+        val parsed = TransactionOptimisticUpdate.parseEditPayload(json)
+        assertNotNull(parsed)
+        assertEquals("CHI", parsed?.type)
+        assertEquals("Ăn uống", parsed?.category)
+        assertEquals("Phở", parsed?.note)
+        assertEquals(false, parsed?.excluded)
+
+        assertNull(TransactionOptimisticUpdate.parseEditPayload(null))
+        assertNull(TransactionOptimisticUpdate.parseEditPayload(""))
+        assertNull(TransactionOptimisticUpdate.parseEditPayload("not-json"))
+    }
+
+    @Test
+    fun overlayPendingEditsWithPendingMutationAppliesFieldsAndSetsPendingSync() {
+        val serverRow = sampleTransaction("tx-1")
+        val pending = mapOf(
+            "tx-1" to PendingEditState(
+                targetId = "tx-1",
+                state = "PENDING",
+                fields = EditFields(type = "CHI", category = "Di chuyển", note = "Grab", excluded = true),
+            ),
+        )
+        val result = TransactionOptimisticUpdate.overlayPendingEdits(listOf(serverRow), pending)
+        assertEquals(1, result.size)
+        val row = result[0]
+        assertEquals("Di chuyển", row.category)
+        assertEquals("Grab", row.note)
+        assertTrue(row.excluded)
+        assertTrue(row.pendingSync)
+        assertFalse(row.blocked)
+    }
+
+    @Test
+    fun overlayPendingEditsWithNoPendingMutationPreservesServerRow() {
+        val serverRow = sampleTransaction("tx-1")
+        val result = TransactionOptimisticUpdate.overlayPendingEdits(listOf(serverRow), emptyMap())
+        assertEquals(1, result.size)
+        val row = result[0]
+        assertEquals("Ăn uống", row.category)
+        assertEquals("Old note", row.note)
+        assertFalse(row.pendingSync)
+        assertFalse(row.blocked)
+    }
+
+    @Test
+    fun overlayPendingEditsWithBlockedMutationPreservesServerFieldsAndSetsBlocked() {
+        val serverRow = sampleTransaction("tx-1")
+        val pending = mapOf(
+            "tx-1" to PendingEditState(
+                targetId = "tx-1",
+                state = "BLOCKED",
+                fields = EditFields(type = "CHI", category = "Mua sắm", note = "Draft note", excluded = true),
+            ),
+        )
+        val result = TransactionOptimisticUpdate.overlayPendingEdits(listOf(serverRow), pending)
+        assertEquals(1, result.size)
+        val row = result[0]
+        assertEquals("Ăn uống", row.category)
+        assertEquals("Old note", row.note)
+        assertFalse(row.excluded)
+        assertFalse(row.pendingSync)
+        assertTrue(row.blocked)
+    }
+
+    @Test
+    fun overlayPendingEditsWithPendingEditNotInPageLeavesServerRowsUnmodified() {
+        val row1 = sampleTransaction("tx-1")
+        val row2 = sampleTransaction("tx-2")
+        val pending = mapOf(
+            "tx-999" to PendingEditState(
+                targetId = "tx-999",
+                state = "PENDING",
+                fields = EditFields(type = "CHI", category = "Du lịch", note = "Khách sạn", excluded = false),
+            ),
+        )
+        val result = TransactionOptimisticUpdate.overlayPendingEdits(listOf(row1, row2), pending)
+        assertEquals(2, result.size)
+        assertEquals("tx-1", result[0].id)
+        assertEquals("Ăn uống", result[0].category)
+        assertFalse(result[0].pendingSync)
+        assertFalse(result[0].blocked)
+        assertEquals("tx-2", result[1].id)
+        assertEquals("Ăn uống", result[1].category)
+        assertFalse(result[1].pendingSync)
+        assertFalse(result[1].blocked)
     }
 }

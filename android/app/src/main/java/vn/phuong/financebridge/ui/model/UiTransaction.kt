@@ -25,6 +25,7 @@ data class UiTransaction(
     val excluded: Boolean = false,
     val memoryKey: String? = null,
     val pendingSync: Boolean = false,
+    val blocked: Boolean = false,
 ) {
     companion object {
         fun create(
@@ -43,6 +44,7 @@ data class UiTransaction(
             excluded: Boolean = false,
             memoryKey: String? = null,
             pendingSync: Boolean = false,
+            blocked: Boolean = false,
         ): UiTransaction {
             val formattedAmount = FinanceFormatters.formatVnd(
                 amount = amount,
@@ -68,6 +70,7 @@ data class UiTransaction(
                 excluded = excluded,
                 memoryKey = memoryKey,
                 pendingSync = pendingSync,
+                blocked = blocked,
             )
         }
     }

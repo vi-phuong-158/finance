@@ -14,6 +14,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import vn.phuong.financebridge.ManualOutbox
 import vn.phuong.financebridge.ui.components.*
 import vn.phuong.financebridge.ui.data.FinanceApi
 import vn.phuong.financebridge.ui.data.parseTransaction
@@ -137,7 +140,19 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
                     val choice = choices.getJSONObject(it); CategoryChoice(choice.getString("name"), choice.getString("type"))
                 }, json.optBoolean("editingEnabled", false))
         }.onSuccess { page ->
-            rows = if (cursor == null) page.rows else rows + page.rows
+            val pendingEdits = withContext(Dispatchers.IO) {
+                val outbox = ManualOutbox(context)
+                try {
+                    outbox.activeEdits().associate { edit ->
+                        val fields = TransactionOptimisticUpdate.parseEditPayload(edit.payload)
+                        edit.targetId to PendingEditState(edit.targetId, edit.state, fields)
+                    }
+                } finally {
+                    outbox.close()
+                }
+            }
+            val overlaid = TransactionOptimisticUpdate.overlayPendingEdits(page.rows, pendingEdits)
+            rows = if (cursor == null) overlaid else rows + overlaid
             nextCursor = page.cursor
             total = page.total
             categories = page.categories

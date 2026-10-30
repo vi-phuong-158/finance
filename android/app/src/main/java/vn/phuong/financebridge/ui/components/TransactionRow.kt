@@ -91,6 +91,19 @@ fun TransactionRow(
                             color = FinanceTheme.colors.primary,
                         )
                     }
+                } else if (transaction.blocked) {
+                    Box(
+                        modifier = Modifier
+                            .clip(FinanceTheme.shapes.pill)
+                            .background(FinanceTheme.colors.warning.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "Cần xử lý",
+                            style = FinanceTheme.typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                            color = FinanceTheme.colors.warning,
+                        )
+                    }
                 }
                 if (transaction.isDuplicateCandidate) {
                     Box(
@@ -106,7 +119,7 @@ fun TransactionRow(
                         )
                     }
                 }
-                if (!transaction.pendingSync && smartStatus != null) {
+                if (!transaction.pendingSync && !transaction.blocked && smartStatus != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -117,17 +130,17 @@ fun TransactionRow(
                                 .clip(CircleShape)
                                 .background(
                                     when (smartStatus) {
-                                        SmartCategoryStatus.REMEMBERED -> FinanceTheme.colors.primary
                                         SmartCategoryStatus.NEEDS_CHECK -> FinanceTheme.colors.warning
                                         SmartCategoryStatus.UNCATEGORIZED -> FinanceTheme.colors.expense
+                                        SmartCategoryStatus.REMEMBERED -> FinanceTheme.colors.primary
                                     }
                                 ),
                         )
                         Text(
                             text = when (smartStatus) {
-                                SmartCategoryStatus.REMEMBERED -> "Đã ghi nhớ"
                                 SmartCategoryStatus.NEEDS_CHECK -> "Cần kiểm tra"
                                 SmartCategoryStatus.UNCATEGORIZED -> "Chưa phân loại"
+                                SmartCategoryStatus.REMEMBERED -> "Đã ghi nhớ"
                             },
                             style = FinanceTheme.typography.caption.copy(fontSize = 10.sp),
                             color = FinanceTheme.colors.textSecondary,
