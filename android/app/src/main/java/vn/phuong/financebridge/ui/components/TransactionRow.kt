@@ -75,6 +75,20 @@ fun TransactionRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (transaction.pendingSync) {
+                    Box(
+                        modifier = Modifier
+                            .clip(FinanceTheme.shapes.pill)
+                            .background(FinanceTheme.colors.primaryContainer)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "Đang chờ đồng bộ",
+                            style = FinanceTheme.typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                            color = FinanceTheme.colors.primary,
+                        )
+                    }
+                }
                 if (transaction.isDuplicateCandidate) {
                     Box(
                         modifier = Modifier

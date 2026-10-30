@@ -126,7 +126,6 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
     LaunchedEffect(filters, search, cursor, revision) {
         loading = true
         error = null
-        if (cursor == null) rows = emptyList()
         delay(300)
         val query = filters + mapOf("q" to search, "limit" to "50") + (cursor?.let { mapOf("cursor" to it) } ?: emptyMap())
         api.read("transactions", query) { json ->
@@ -152,6 +151,11 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
         Text("Lịch sử giao dịch", style = FinanceTheme.typography.headlineLarge)
         OutlinedTextField(search, { search = it; cursor = null }, placeholder = { Text("Tìm giao dịch, ghi chú…") },
             singleLine = true, modifier = Modifier.fillMaxWidth())
+        if (loading && rows.isNotEmpty()) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(2.dp), color = FinanceTheme.colors.primary, trackColor = FinanceTheme.colors.primaryContainer)
+        } else {
+            Spacer(Modifier.height(2.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SecondaryButton(text = if (showFilters) "Ẩn bộ lọc" else "Bộ lọc", onClick = { showFilters = !showFilters })
             TextButton(onClick = { cursor = null; revision++ }) { Text("Tải lại") }
@@ -212,8 +216,10 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
                     draft = editFields, onDraftChanged = { editFields = it }, canSave = editAllowed,
                     verifying = verifyingEdit, verificationMessage = editNotice,
                     onDismiss = { editing = null; editFields = null; editRequested = false }, onQueued = {
-                        editing = null; editFields = null; selected = null; selectedId = null; editRequested = false; cursor = null; revision++
-                        savedMessage = "Đã lưu thay đổi trên máy. Bấm Tải lại sau khi đồng bộ để xem kết quả."
+                        val applied = editFields ?: TransactionEditFlow.fields(editing!!)
+                        rows = TransactionOptimisticUpdate.applyToRows(rows, editing!!.id, applied)
+                        editing = null; editFields = null; selected = null; selectedId = null; editRequested = false
+                        savedMessage = "Đã lưu trên máy. Đang chờ đồng bộ."
                     })
             } else {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
