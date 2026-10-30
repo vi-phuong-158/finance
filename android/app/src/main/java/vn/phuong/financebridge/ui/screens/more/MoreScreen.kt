@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import vn.phuong.financebridge.BuildConfig
 import vn.phuong.financebridge.ui.components.FinanceCard
 import vn.phuong.financebridge.ui.components.SecondaryButton
 import vn.phuong.financebridge.ui.screens.memory.CategoryMemoryScreen
@@ -52,7 +53,7 @@ fun MoreScreen(
                     tint = FinanceTheme.colors.primary,
                 )
                 Text(
-                    text = "Khác",
+                    text = "Cá nhân",
                     style = FinanceTheme.typography.titleMedium,
                     color = FinanceTheme.colors.primary,
                 )
@@ -81,7 +82,7 @@ fun MoreScreen(
                     tint = FinanceTheme.colors.primary,
                 )
                 Text(
-                    text = "Khác",
+                    text = "Cá nhân",
                     style = FinanceTheme.typography.titleMedium,
                     color = FinanceTheme.colors.primary,
                 )
@@ -110,7 +111,7 @@ fun MoreScreen(
                     tint = FinanceTheme.colors.primary,
                 )
                 Text(
-                    text = "Khác",
+                    text = "Cá nhân",
                     style = FinanceTheme.typography.titleMedium,
                     color = FinanceTheme.colors.primary,
                 )
@@ -132,7 +133,7 @@ fun MoreScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Khác",
+            text = "Cá nhân",
             style = FinanceTheme.typography.headlineLarge,
             color = FinanceTheme.colors.textPrimary,
             modifier = Modifier.padding(top = 8.dp),
@@ -199,8 +200,8 @@ fun MoreScreen(
         ) {
             MoreRow(
                 icon = Icons.Rounded.Category,
-                iconTint = Color(0xFFAB47BC),
-                iconBg = Color(0xFFAB47BC).copy(alpha = 0.12f),
+                iconTint = FinanceTheme.colors.primary,
+                iconBg = FinanceTheme.colors.primaryContainer,
                 title = "Danh mục chi tiêu",
                 subtitle = "Xem bảng phân loại thu chi và danh mục mặc định",
             )
@@ -233,8 +234,8 @@ fun MoreScreen(
         ) {
             MoreRow(
                 icon = Icons.Rounded.DarkMode,
-                iconTint = Color(0xFFFFA726),
-                iconBg = Color(0xFFFFA726).copy(alpha = 0.12f),
+                iconTint = FinanceTheme.colors.warning,
+                iconBg = FinanceTheme.colors.warning.copy(alpha = 0.14f),
                 title = "Cài đặt hiển thị",
                 subtitle = "Tùy chọn giao diện sáng, tối hoặc theo hệ thống",
             )
@@ -250,10 +251,10 @@ fun MoreScreen(
         ) {
             MoreRow(
                 icon = Icons.Rounded.Info,
-                iconTint = Color(0xFF78909C),
-                iconBg = Color(0xFF78909C).copy(alpha = 0.12f),
+                iconTint = FinanceTheme.colors.info,
+                iconBg = FinanceTheme.colors.info.copy(alpha = 0.12f),
                 title = "Thông tin ứng dụng",
-                subtitle = "Finance Bridge V3.1 · Phiên bản 1.0 (Build 1)",
+                subtitle = "Vigil Finance · Phiên bản ${BuildConfig.VERSION_NAME}",
             )
         }
 
@@ -290,9 +291,9 @@ fun MoreScreen(
                             )
                         }
                         "about" -> {
-                            Text("Finance Bridge", style = FinanceTheme.typography.titleLarge)
+                            Text("Vigil Finance", style = FinanceTheme.typography.titleLarge)
                             Text(
-                                "Ứng dụng tự động ghi nhận biến động số dư ngân hàng và quản lý tài chính cá nhân.\nPhiên bản 1.0 (Build 1)",
+                                "Ứng dụng tự động ghi nhận biến động số dư ngân hàng và quản lý tài chính cá nhân.\nPhiên bản ${BuildConfig.VERSION_NAME}",
                                 style = FinanceTheme.typography.bodyMedium,
                                 color = FinanceTheme.colors.textSecondary,
                             )

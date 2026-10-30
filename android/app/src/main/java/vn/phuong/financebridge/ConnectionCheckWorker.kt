@@ -25,7 +25,7 @@ class ConnectionCheckWorker(
             eventId = EventIdentity.createEventId("VCB", postedAt, TEST_TRANSACTION_TEXT),
             bank = "VCB",
             packageName = "com.VCB",
-            title = "Finance Bridge connection check",
+            title = "Vigil Finance connection check",
             text = TEST_TRANSACTION_TEXT,
             postedAt = postedAt,
             state = TransactionOutbox.STATE_PENDING,

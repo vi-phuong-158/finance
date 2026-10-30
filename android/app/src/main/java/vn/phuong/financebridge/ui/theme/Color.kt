@@ -4,58 +4,68 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// Cyan/blue finance palette derived from DESIGN.md and the MISA layout reference.
-// Keep token names stable so existing UI components remain source-compatible.
-val Primary50 = Color(0xFFF1FBFE)
-val Primary100 = Color(0xFFDDF6FD)
-val Primary200 = Color(0xFFB8ECF8)
-val Primary300 = Color(0xFF83DDF1)
-val Primary400 = Color(0xFF43C8E8)
-val Primary500 = Color(0xFF08A9D6)
-val Primary600 = Color(0xFF078CC5)
-val Primary700 = Color(0xFF0875A7)
-val Primary800 = Color(0xFF0B6088)
-val Primary900 = Color(0xFF104F70)
+// Vigil Green fintech palette (UI V2 Phase F).
+// Primary #078553 (Primary Strong) ensures WCAG AA contrast ratio (>4.5:1) for buttons, tabs, text on green.
+// Accent #00A86B is reserved for decorations, gradients and bold headline text.
+val Primary50 = Color(0xFFEFFAF5)   // Mint Light
+val Primary100 = Color(0xFFDDF7EC)  // Mint Container
+val Primary200 = Color(0xFFBCEFD9)
+val Primary300 = Color(0xFF8CE1BE)
+val Primary400 = Color(0xFF3DC48D)
+val Primary500 = Color(0xFF078553)  // Primary Strong (WCAG AA compliant)
+val Primary600 = Color(0xFF056E43)
+val Primary700 = Color(0xFF055737)
+val Primary800 = Color(0xFF06452D)
+val Primary900 = Color(0xFF063A26)
 
-val HeroStart = Color(0xFF177CF2)
-val HeroEnd = Color(0xFF18C8D9)
-val AccentMint = Color(0xFF9AE8F4)
+val BrandAccent = Color(0xFF00A86B) // Decorative / large display
+val HeroStart = Color(0xFF078553)
+val HeroEnd = Color(0xFF00A86B)
+val AccentMint = Color(0xFFDDF7EC)
 
 // Neutral & surfaces (Light)
-val BackgroundLight = Color(0xFFF4F6F8)
+val BackgroundLight = Color(0xFFF5F7F6)
 val SurfaceLight = Color(0xFFFFFFFF)
 val SurfaceCardLight = Color(0xFFFFFFFF)
-// Glass remains available as a secondary effect, but cards should read as solid white first.
-val SurfaceGlassLight = Color(0xFAFFFFFF)
-val BorderGlassLight = Color(0xFFE7EBEF)
+// Floating navigation background (white alpha ~0.94, no blur required)
+val SurfaceGlassLight = Color(0xF0FFFFFF)
+val BorderGlassLight = Color(0xFFE6EBE8)
 
-val TextPrimaryLight = Color(0xFF151A23)
-val TextSecondaryLight = Color(0xFF687386)
-val TextMutedLight = Color(0xFF98A1AE)
+val TextPrimaryLight = Color(0xFF161B18)
+val TextSecondaryLight = Color(0xFF66716B)
+val TextMutedLight = Color(0xFF909A95)
 
 // Semantic colors
-val IncomeGreen = Color(0xFF28A765)
-val ExpenseRed = Color(0xFFEF5B63)
+val IncomeGreen = Color(0xFF078553)
+val ExpenseRed = Color(0xFFE04848)
 val WarningGold = Color(0xFFF59E0B)
 val InfoBlue = Color(0xFF159BD7)
 
-// Dark Theme tokens
-val BackgroundDark = Color(0xFF0E151B)
-val SurfaceDark = Color(0xFF151E26)
-val SurfaceElevatedDark = Color(0xFF1B2731)
-val SurfaceGlassDark = Color(0xF21B2731)
-val BorderGlassDark = Color(0xFF2B3945)
+// Tinted shadow colors
+val ShadowAmbientLight = Color(0x0C000000)
+val ShadowSpotLight = Color(0x1A078553)
 
-val PrimaryDark = Color(0xFF4EC9E7)
-val TextPrimaryDark = Color(0xFFF4F7FA)
-val TextSecondaryDark = Color(0xFFC2CBD3)
-val TextMutedDark = Color(0xFF8895A0)
+// Dark Theme tokens
+val BackgroundDark = Color(0xFF0F1512)
+val SurfaceDark = Color(0xFF161F1A)
+val SurfaceElevatedDark = Color(0xFF1E2B24)
+val SurfaceGlassDark = Color(0xF01E2B24)
+val BorderGlassDark = Color(0xFF2C3E34)
+
+val PrimaryDark = Color(0xFF4DD096)
+val TextPrimaryDark = Color(0xFFF4F7F5)
+val TextSecondaryDark = Color(0xFFC0CBC4)
+val TextMutedDark = Color(0xFF86958C)
+
+val ShadowAmbientDark = Color(0x1F000000)
+val ShadowSpotDark = Color(0x2E000000)
 
 @Immutable
 data class FinanceColors(
     val primary: Color,
     val primaryContainer: Color,
     val onPrimary: Color,
+    val brandAccent: Color,
     val background: Color,
     val surface: Color,
     val surfaceCard: Color,
@@ -68,6 +78,10 @@ data class FinanceColors(
     val expense: Color,
     val warning: Color,
     val info: Color,
+    val heroStart: Color,
+    val heroEnd: Color,
+    val shadowAmbient: Color,
+    val shadowSpot: Color,
     val isDark: Boolean,
 )
 
@@ -76,6 +90,7 @@ val LocalFinanceColors = staticCompositionLocalOf {
         primary = Primary500,
         primaryContainer = Primary100,
         onPrimary = Color.White,
+        brandAccent = BrandAccent,
         background = BackgroundLight,
         surface = SurfaceLight,
         surfaceCard = SurfaceCardLight,
@@ -88,6 +103,10 @@ val LocalFinanceColors = staticCompositionLocalOf {
         expense = ExpenseRed,
         warning = WarningGold,
         info = InfoBlue,
+        heroStart = HeroStart,
+        heroEnd = HeroEnd,
+        shadowAmbient = ShadowAmbientLight,
+        shadowSpot = ShadowSpotLight,
         isDark = false,
     )
 }

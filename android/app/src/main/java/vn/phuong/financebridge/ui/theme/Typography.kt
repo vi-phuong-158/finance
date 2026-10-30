@@ -23,6 +23,7 @@ data class FinanceTypography(
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
+        fontFeatureSettings = "tnum",
     ),
     val balance: TextStyle = TextStyle(
         fontFamily = BeVietnamProFamily,
@@ -30,18 +31,21 @@ data class FinanceTypography(
         fontSize = 30.sp,
         lineHeight = 38.sp,
         letterSpacing = (-0.5).sp,
+        fontFeatureSettings = "tnum",
     ),
     val headlineLarge: TextStyle = TextStyle(
         fontFamily = BeVietnamProFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
+        fontFeatureSettings = "tnum",
     ),
     val headlineMedium: TextStyle = TextStyle(
         fontFamily = BeVietnamProFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
         lineHeight = 28.sp,
+        fontFeatureSettings = "tnum",
     ),
     val titleLarge: TextStyle = TextStyle(
         fontFamily = BeVietnamProFamily,

@@ -1,5 +1,6 @@
 package vn.phuong.financebridge.ui.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -20,10 +22,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.theme.FinanceTheme
-import vn.phuong.financebridge.ui.theme.HeroEnd
-import vn.phuong.financebridge.ui.theme.HeroStart
+import vn.phuong.financebridge.ui.util.TextScaleHelper
 
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun BalanceCard(
     balanceText: String,
@@ -35,8 +35,12 @@ fun BalanceCard(
     var isAmountVisible by remember { mutableStateOf(true) }
     val cardShape = FinanceTheme.shapes.xxl
     val gradientBrush = Brush.linearGradient(
-        colors = listOf(HeroStart, HeroEnd),
+        colors = listOf(FinanceTheme.colors.heroStart, FinanceTheme.colors.heroEnd),
     )
+
+    val sanitizedBalance = remember(balanceText) {
+        TextScaleHelper.formatWithNonBreakingCurrency(balanceText)
+    }
 
     Box(
         modifier = modifier
@@ -44,63 +48,102 @@ fun BalanceCard(
             .shadow(
                 elevation = FinanceTheme.spacing.elevationMedium,
                 shape = cardShape,
-                ambientColor = Color(0x12000000),
-                spotColor = Color(0x28177CF2),
+                ambientColor = FinanceTheme.colors.shadowAmbient,
+                spotColor = FinanceTheme.colors.shadowSpot,
             )
             .clip(cardShape)
-            .background(gradientBrush)
-            .padding(22.dp),
+            .background(gradientBrush),
     ) {
+        // Subtle background decorative vector shapes (modern fintech feel, single consistent style, no raster images)
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val width = size.width
+            val height = size.height
+            // Soft decorative concentric circles
+            drawCircle(
+                color = Color.White.copy(alpha = 0.05f),
+                radius = height * 0.75f,
+                center = Offset(width * 0.95f, height * 0.20f),
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.03f),
+                radius = height * 1.15f,
+                center = Offset(width * 0.95f, height * 0.20f),
+            )
+        }
+
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Header: Title + Eye toggle (touch target >= 48dp)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Dòng tiền ròng trong kỳ",
-                    style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    text = "DÒNG TIỀN RÒNG TRONG KỲ",
+                    style = FinanceTheme.typography.caption.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
+                        fontSize = 11.sp,
+                    ),
                     color = Color.White.copy(alpha = 0.88f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+
+                // Eye toggle with guaranteed >=48dp touch target
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(48.dp)
                         .clip(FinanceTheme.shapes.pill)
-                        .background(Color.White.copy(alpha = 0.15f))
                         .clickable { isAmountVisible = !isAmountVisible },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = if (isAmountVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
-                        contentDescription = "Ẩn/hiện dòng tiền",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(FinanceTheme.shapes.pill)
+                            .background(Color.White.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = if (isAmountVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                            contentDescription = if (isAmountVisible) "Ẩn số tiền" else "Hiện số tiền",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
 
-            Text(
-                text = if (isAmountVisible) balanceText else "••••••••\u00A0đ",
-                style = FinanceTheme.typography.balance.copy(fontSize = 34.sp),
+            // Hero Amount (Auto-shrinking, non-breaking currency, maxLines = 1)
+            AmountText(
+                amountText = if (isAmountVisible) sanitizedBalance else "••••••••\u00A0đ",
+                style = FinanceTheme.typography.balance.copy(fontSize = 32.sp),
                 color = Color.White,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.Bold,
+                autoShrink = true,
+                minScaleRatio = 0.70f,
+                modifier = Modifier.fillMaxWidth(),
             )
 
+            // Bottom info: Short explanation + Period chip
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Tổng thu trừ tổng chi",
-                    style = FinanceTheme.typography.caption,
-                    color = Color.White.copy(alpha = 0.80f),
+                    text = "Thu: $incomeText  ·  Chi: $expenseText",
+                    style = FinanceTheme.typography.caption.copy(fontSize = 12.sp),
+                    color = Color.White.copy(alpha = 0.85f),
                     maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
@@ -108,12 +151,15 @@ fun BalanceCard(
                 Box(
                     modifier = Modifier
                         .clip(FinanceTheme.shapes.pill)
-                        .background(Color.White.copy(alpha = 0.18f))
-                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                        .background(Color.White.copy(alpha = 0.20f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
                 ) {
                     Text(
                         text = periodLabel,
-                        style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
+                        style = FinanceTheme.typography.caption.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp,
+                        ),
                         color = Color.White,
                         maxLines = 1,
                         softWrap = false,
