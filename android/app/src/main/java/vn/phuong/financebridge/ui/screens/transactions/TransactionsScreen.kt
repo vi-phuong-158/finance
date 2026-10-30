@@ -23,6 +23,8 @@ import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.FinancePeriod
 import vn.phuong.financebridge.ui.util.CategoryVisuals
+import vn.phuong.financebridge.EditFields
+import vn.phuong.financebridge.CategoryMemory
 import vn.phuong.financebridge.CategoryChoice
 import vn.phuong.financebridge.CategoryMemoryIndex
 import vn.phuong.financebridge.ui.data.CategoryMemoryRepository
@@ -57,6 +59,10 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
     var categories by remember { mutableStateOf<List<CategoryChoice>>(emptyList()) }
     var editingEnabled by remember { mutableStateOf(false) }
     var editing by rememberSaveable(stateSaver = TransactionSaver) { mutableStateOf<UiTransaction?>(null) }
+    var editFields by rememberSaveable(stateSaver = EditFieldsSaver) { mutableStateOf<EditFields?>(null) }
+    var verifyingEdit by remember { mutableStateOf(false) }
+    var editAllowed by remember { mutableStateOf(false) }
+    var editNotice by remember { mutableStateOf<String?>(null) }
     var opening by remember { mutableStateOf(false) }
     var savingEdit by remember { mutableStateOf(false) }
     var savedMessage by remember { mutableStateOf<String?>(null) }
@@ -77,18 +83,37 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
     LaunchedEffect(rows, selectedId) {
         if (selected == null && selectedId != null) selected = rows.firstOrNull { it.id == selectedId }
     }
-    LaunchedEffect(selected, editRequested) {
+    LaunchedEffect(selectedId, editRequested) {
         val transaction = selected
-        if (transaction != null && editRequested && editing == null && !opening) {
-            opening = true
+        if (transaction != null && editRequested) {
+            opening = true; verifyingEdit = true; editAllowed = false
             try {
-                when (val start = prepareEdit(context, api, transaction)) {
-                    is EditStart.Ready -> { start.categories?.let { categories = it }; editing = start.transaction }
-                    is EditStart.Refused -> { savedMessage = start.message; editRequested = false }
+                val shown = editing ?: transaction
+                when (val start = prepareEdit(context, shown)) {
+                    is EditStart.Refused -> {
+                        savedMessage = start.message; editRequested = false; editing = null; editFields = null
+                    }
+                    is EditStart.Ready -> {
+                        editing = shown
+                        if (editFields == null) {
+                            val proposed = CategoryMemory.preselectForEdit(CategoryMemory.suggest(memory, shown.memoryKey, shown.type.name),
+                                shown.source, shown.revision, shown.category)
+                            editFields = TransactionEditFlow.fields(shown).copy(category = proposed)
+                        }
+                        editNotice = TransactionEditFlow.pending(shown, editFields!!).message
+                        // Form is already mounted. Only Save waits for this network read.
+                        val lookup = api.latestTransaction(shown.id)
+                        val verified = lookup.fold(onSuccess = { latest ->
+                            categories = latest.categories
+                            TransactionEditFlow.online(shown, latest.transaction, editFields!!, latest.editingEnabled)
+                        }, onFailure = { TransactionEditFlow.offline(shown, editFields!!, start.latestSyncedEdit) })
+                        editing = verified.base; editFields = verified.fields
+                        editAllowed = verified.canSave; editNotice = verified.message
+                    }
                 }
             } finally {
-                // Closing the sheet cancels this effect, including its network request.
-                opening = false
+                // Cancellation from close/fold cannot leave a later transaction stuck opening.
+                opening = false; verifyingEdit = false
             }
         }
     }
@@ -181,11 +206,13 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
     }
     selected?.let { transaction ->
         val sheetState = rememberModalBottomSheetState(confirmValueChange = { !savingEdit || it != SheetValue.Hidden })
-        ModalBottomSheet(sheetState = sheetState, onDismissRequest = { if (!savingEdit) { selected = null; selectedId = null; editing = null; editRequested = false } }) {
+        ModalBottomSheet(sheetState = sheetState, onDismissRequest = { if (!savingEdit) { selected = null; selectedId = null; editing = null; editFields = null; editRequested = false } }) {
             if (editing != null) {
                 TransactionEditForm(context, editing!!, categories, memory, embedded = true, onSavingChanged = { savingEdit = it },
-                    onDismiss = { editing = null; editRequested = false }, onQueued = {
-                        editing = null; selected = null; selectedId = null; editRequested = false; cursor = null; revision++
+                    draft = editFields, onDraftChanged = { editFields = it }, canSave = editAllowed,
+                    verifying = verifyingEdit, verificationMessage = editNotice,
+                    onDismiss = { editing = null; editFields = null; editRequested = false }, onQueued = {
+                        editing = null; editFields = null; selected = null; selectedId = null; editRequested = false; cursor = null; revision++
                         savedMessage = "Đã lưu thay đổi trên máy. Bấm Tải lại sau khi đồng bộ để xem kết quả."
                     })
             } else {
