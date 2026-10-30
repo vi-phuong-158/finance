@@ -26,3 +26,20 @@
   - Pure status derivation in `TransactionSmartStatus` with unit tests.
   - Strict manual confirmation maintained; no auto-submit.
 - Validation: 92/92 JVM unit tests passing, clean debug APK build, 7 webhook policy checks pass.
+
+## Milestone 3: Round 4 review fixes (PROMPT 10, 30/10/2026)
+- **Overlay queued outbox edits on server load & map blocked state (Commit 4a604df):**
+  - Added `ManualOutbox.activeEdits()` querying `PENDING`, `SYNCING`, and `BLOCKED` mutations on `Dispatchers.IO` (read-only).
+  - Added pure `TransactionOptimisticUpdate.overlayPendingEdits()` and `parseEditPayload()` to overlay active outbox edits onto fresh server responses.
+  - Server reloads, searches, and tab switches preserve pending mutations (`pendingSync = true`), eliminating the rollback glitch.
+  - Mapped `BLOCKED` mutations to "Cần xử lý" status pill without applying draft payload.
+  - Added 4 JVM unit tests for overlay logic + 1 for outbox activeEdits query.
+- **Reduce category badges per Brief §21 (Commit aadf760):**
+  - In `TransactionSmartStatus`, `source == "MONEYLOVER"` is treated as `REMEMBERED` (confirmed by user in Money Lover history).
+  - In `TransactionRow`, badges are suppressed when status is `REMEMBERED` or `null` (internal transfer), preventing the entire list from being covered in yellow dots.
+  - Only "Cần kiểm tra" (warning amber dot) and "Chưa phân loại" (expense red dot) show badges.
+  - Added test cases in `TransactionSmartStatusTest`.
+- **Force excluded=true for internal transfers (Commit 6bdd8e0):**
+  - In `TransactionOptimisticUpdate.apply`, `category == "Chuyển nội bộ"` automatically forces `excluded = true` to match server rules.
+  - Added JVM test `applyForInternalTransferCategoryAlwaysForcesExcludedToTrue`.
+- **Validation:** 101/101 JVM unit tests passing (0 failures, 0 ignored, exceeding target >= 92), 45 actionable tasks executed, 7 webhook configuration policy checks passed, clean `assembleDebug` APK build.
