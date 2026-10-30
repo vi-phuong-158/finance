@@ -445,3 +445,157 @@ test('owner-shaped VCB samples: a virtual (letters+digits) receiver account stil
   }
   assert.deepEqual(rules(ledger), []);
 });
+
+test('UI V2 Scenario A: first explicit classification for an ACCOUNT is PRESELECT', () => {
+  const acct = accountOf('0123456789');
+  const index = buildMemoryIndex([{
+    transactionId: 't1',
+    identity: acct,
+    type: 'CHI',
+    category: 'Ăn uống',
+    at: at(1),
+  }], []);
+  assert.equal(index.length, 1);
+  const rule = index[0];
+  assert.equal(rule.key, acct.key);
+  assert.equal(rule.identityType, 'ACCOUNT');
+  assert.equal(rule.category, 'Ăn uống');
+  assert.equal(rule.level, 'PRESELECT');
+  assert.equal(rule.count, 1);
+  assert.equal(rule.total, 1);
+  assert.equal(rule.confidence, 1);
+  assert.deepEqual(rule.recent, ['Ăn uống']);
+});
+
+test('UI V2 Scenario B: two accounts sharing same receiver name do not merge memory', () => {
+  const acctA = accountOf('0123456789');
+  const acctB = accountOf('9876543210');
+  assert.notEqual(acctA.key, acctB.key);
+  const observations: Observation[] = [
+    { transactionId: 'tA', identity: acctA, type: 'CHI', category: 'Ăn uống', at: at(1) },
+    { transactionId: 'tB', identity: acctB, type: 'CHI', category: 'Gia đình', at: at(2) },
+  ];
+  const index = buildMemoryIndex(observations, []);
+  assert.equal(index.length, 2);
+  const ruleA = find(index, acctA.key);
+  const ruleB = find(index, acctB.key);
+  assert.ok(ruleA && ruleB);
+  assert.equal(ruleA.category, 'Ăn uống');
+  assert.equal(ruleA.level, 'PRESELECT');
+  assert.equal(ruleB.category, 'Gia đình');
+  assert.equal(ruleB.level, 'PRESELECT');
+  assert.equal(ruleA.count, 1);
+  assert.equal(ruleB.count, 1);
+});
+
+test('UI V2 Scenario C: same account THU and CHI do not cross-learn', () => {
+  const acct = accountOf('0123456789');
+  const observations: Observation[] = [
+    { transactionId: 't1', identity: acct, type: 'CHI', category: 'Mua sắm', at: at(1) },
+    { transactionId: 't2', identity: acct, type: 'THU', category: 'Thu nhập khác', at: at(2) },
+  ];
+  const index = buildMemoryIndex(observations, []);
+  assert.equal(index.length, 2);
+  const chiRule = find(index, acct.key, 'CHI');
+  const thuRule = find(index, acct.key, 'THU');
+  assert.ok(chiRule && thuRule);
+  assert.equal(chiRule.category, 'Mua sắm');
+  assert.equal(chiRule.type, 'CHI');
+  assert.equal(chiRule.level, 'PRESELECT');
+  assert.equal(thuRule.category, 'Thu nhập khác');
+  assert.equal(thuRule.type, 'THU');
+  assert.equal(thuRule.level, 'PRESELECT');
+});
+
+test('UI V2 Scenario D: newest explicit user choice wins over older history for ACCOUNT', () => {
+  const acct = accountOf('0123456789');
+  // 3 times "Ăn uống"
+  const history: Observation[] = [
+    { transactionId: 't1', identity: acct, type: 'CHI', category: 'Ăn uống', at: at(1) },
+    { transactionId: 't2', identity: acct, type: 'CHI', category: 'Ăn uống', at: at(2) },
+    { transactionId: 't3', identity: acct, type: 'CHI', category: 'Ăn uống', at: at(3) },
+  ];
+  let index = buildMemoryIndex(history, []);
+  let rule = find(index, acct.key)!;
+  assert.equal(rule.category, 'Ăn uống');
+  assert.equal(rule.level, 'PRESELECT');
+  assert.equal(rule.count, 3);
+  assert.equal(rule.total, 3);
+
+  // User changes to "Gia đình"
+  const correction: Observation = { transactionId: 't4', identity: acct, type: 'CHI', category: 'Gia đình', at: at(4) };
+  index = buildMemoryIndex([...history, correction], []);
+  rule = find(index, acct.key)!;
+  // The newest choice "Gia đình" MUST win immediately, even though "Ăn uống" has count 3
+  assert.equal(rule.category, 'Gia đình');
+  assert.equal(rule.level, 'PRESELECT');
+  assert.equal(rule.count, 1);
+  assert.equal(rule.total, 4);
+  assert.equal(rule.confidence, 0.25);
+  assert.deepEqual(rule.recent, ['Gia đình', 'Ăn uống']);
+
+  // If user continues with 3 more "Gia đình" (total 4 out of 5), rule becomes STRONG
+  const moreFamily: Observation[] = [
+    { transactionId: 't5', identity: acct, type: 'CHI', category: 'Gia đình', at: at(5) },
+    { transactionId: 't6', identity: acct, type: 'CHI', category: 'Gia đình', at: at(6) },
+    { transactionId: 't7', identity: acct, type: 'CHI', category: 'Gia đình', at: at(7) },
+  ];
+  index = buildMemoryIndex([...history.slice(2), correction, ...moreFamily], []); // window of 5: 1x Ăn uống, 4x Gia đình
+  rule = find(index, acct.key)!;
+  assert.equal(rule.category, 'Gia đình');
+  assert.equal(rule.count, 4);
+  assert.equal(rule.total, 5);
+  assert.equal(rule.confidence, 0.8);
+  assert.equal(rule.level, 'STRONG');
+});
+
+test('UI V2 Scenario E: fallback to Counterparty when no account identity', () => {
+  const store = resolveIdentity({ source: 'BANK_NOTIFICATION', type: 'CHI', bank: 'VCB', counterparty: 'TIEM TAP HOA AN AN', description: '' })!;
+  assert.equal(store.type, 'COUNTERPARTY');
+  // 1 observation is HINT
+  let index = buildMemoryIndex([{ transactionId: 't1', identity: store, type: 'CHI', category: 'Siêu thị', at: at(1) }], []);
+  assert.equal(index[0].level, 'HINT');
+  assert.equal(index[0].category, 'Siêu thị');
+  // 2 observations is PRESELECT
+  index = buildMemoryIndex([
+    { transactionId: 't1', identity: store, type: 'CHI', category: 'Siêu thị', at: at(1) },
+    { transactionId: 't2', identity: store, type: 'CHI', category: 'Siêu thị', at: at(2) },
+  ], []);
+  assert.equal(index[0].level, 'PRESELECT');
+  // 4 observations (4/4) is STRONG
+  index = buildMemoryIndex([1, 2, 3, 4].map((i) => ({ transactionId: `t${i}`, identity: store, type: 'CHI' as const, category: 'Siêu thị', at: at(i) })), []);
+  assert.equal(index[0].level, 'STRONG');
+});
+
+test('UI V2 Scenario F: fallback to Description with 0.85 confidence factor', () => {
+  const desc = resolveIdentity({ source: 'MANUAL', type: 'CHI', bank: null, counterparty: '', description: 'Thanh toan tien dien' })!;
+  assert.equal(desc.type, 'DESCRIPTION');
+  // 1 observation: HINT
+  let index = buildMemoryIndex([{ transactionId: 't1', identity: desc, type: 'CHI', category: 'Hóa đơn & Tiện ích', at: at(1) }], []);
+  assert.equal(index[0].level, 'HINT');
+  assert.equal(index[0].confidence, 0.85);
+
+  // 4 observations of 4: STRONG (4/4 * 0.85 = 0.85 >= 0.8)
+  index = buildMemoryIndex([1, 2, 3, 4].map((i) => ({ transactionId: `t${i}`, identity: desc, type: 'CHI' as const, category: 'Hóa đơn & Tiện ích', at: at(i) })), []);
+  assert.equal(index[0].level, 'STRONG');
+  assert.equal(index[0].confidence, 0.85);
+
+  // 5 observations (4 of 5): PRESELECT (4/5 * 0.85 = 0.68 < 0.8)
+  index = buildMemoryIndex([
+    ...[1, 2, 3, 4].map((i) => ({ transactionId: `t${i}`, identity: desc, type: 'CHI' as const, category: 'Hóa đơn & Tiện ích', at: at(i) })),
+    { transactionId: 't5', identity: desc, type: 'CHI', category: 'Chi phí khác', at: at(5) },
+  ], []);
+  assert.equal(index[0].level, 'PRESELECT');
+  assert.equal(index[0].confidence, 0.68);
+});
+
+test('UI V2 Regression: COUNTERPARTY single observation remains HINT and DESCRIPTION confidence preserves 0.85 factor', () => {
+  const singleParty = buildMemoryIndex(observe(party, ['Ăn uống']), [])[0];
+  assert.equal(singleParty.level, 'HINT');
+  assert.equal(singleParty.category, 'Ăn uống');
+  assert.equal(singleParty.confidence, 1);
+
+  const singleDesc = buildMemoryIndex(observe('DESCRIPTION:TIEN DIEN', ['Hóa đơn & Tiện ích']), [])[0];
+  assert.equal(singleDesc.level, 'HINT');
+  assert.equal(singleDesc.confidence, 0.85);
+});
