@@ -1,3 +1,4 @@
+import { getGoogleSheetsClient, logReadTiming } from './google-read-client.js';
 import type { GoogleConfiguration } from './configuration.js';
 import type { FinanceReadPort } from './unified-transactions.js';
 
@@ -14,14 +15,17 @@ export function financeReadRanges(tabs: { title: string; rows: number; columns: 
 }
 
 export async function makeGoogleFinanceReadPort(config: GoogleConfiguration): Promise<FinanceReadPort> {
-  const { google } = await import('googleapis');
-  const auth = new google.auth.GoogleAuth({ credentials: { client_email: config.clientEmail, private_key: config.privateKey },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
-  const sheets = google.sheets({ version: 'v4', auth });
+  const authStarted = performance.now();
+  const sheets = await getGoogleSheetsClient(config, 'readonly');
+  logReadTiming('client', authStarted);
   return { async readFinance() {
     // Fixed allowlist: Raw_Capture and client-provided ranges are never read.
+    // GoogleAuth acquires OAuth tokens lazily: the first metadata call includes token acquisition.
+    const metadataStarted = performance.now();
     const metadata = await sheets.spreadsheets.get({ spreadsheetId: config.spreadsheetId,
       fields: 'sheets(properties(title,sheetType,gridProperties(rowCount,columnCount)))' });
+    logReadTiming('metadata', metadataStarted);
+    const processingStarted = performance.now();
     const ranges = financeReadRanges((metadata.data.sheets ?? []).map(({ properties: p }) => ({
       title: p?.title ?? '', rows: p?.gridProperties?.rowCount ?? 0, columns: p?.gridProperties?.columnCount ?? 0, type: p?.sheetType ?? '',
     })));
@@ -39,8 +43,11 @@ export async function makeGoogleFinanceReadPort(config: GoogleConfiguration): Pr
       // One extra column when present so stray data beside the identities fails closed.
       ranges.push(`'Transaction_Identity'!A1:${identitySheet.gridProperties.columnCount === 4 ? 'D' : 'E'}${identitySheet.gridProperties.rowCount}`);
     }
+    logReadTiming('processing', processingStarted);
+    const batchStarted = performance.now();
     const response = await sheets.spreadsheets.values.batchGet({ spreadsheetId: config.spreadsheetId,
       ranges, valueRenderOption: 'UNFORMATTED_VALUE' });
+    logReadTiming('batchGet', batchStarted);
     const values = (response.data.valueRanges ?? []).map((range) => range.values ?? []);
     const [bank, history] = values;
     const edits = editSheet ? values[2] : undefined, identities = identitySheet ? values[editSheet ? 3 : 2] : undefined;

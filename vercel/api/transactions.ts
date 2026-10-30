@@ -1,5 +1,8 @@
+import { logReadTiming } from '../lib/google-read-client.js';
 import { handleFinanceRead } from '../lib/finance-read-service.js';
 import type { ReadRequest, ReadResponse } from '../lib/finance-read-service.js';
 export default async function handler(request: ReadRequest, response: ReadResponse) {
-  return handleFinanceRead(request, response, 'transactions');
+  const started = performance.now();
+  try { return await handleFinanceRead(request, response, 'transactions'); }
+  finally { logReadTiming('total', started); }
 }

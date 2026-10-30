@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { getGoogleSheetsClient, logReadTiming } from './google-read-client.js';
 import { configurationIsValid, readGoogleConfiguration } from './configuration.js';
 import type { Environment, GoogleConfiguration } from './configuration.js';
 import type { FinanceSnapshot } from './unified-transactions.js';
@@ -69,12 +70,16 @@ export async function handleCategoryMemoryRequest(request: MemoryRequest, env: E
 export async function makeCategoryMemoryPort(config: GoogleConfiguration, write: boolean): Promise<MemoryPort> {
   const { makeGoogleFinanceReadPort } = await import('./google-finance-read.js');
   const reader = await makeGoogleFinanceReadPort(config);
-  const { google } = await import('googleapis');
-  const auth = new google.auth.GoogleAuth({ credentials: { client_email: config.clientEmail, private_key: config.privateKey },
-    scopes: [write ? 'https://www.googleapis.com/auth/spreadsheets' : 'https://www.googleapis.com/auth/spreadsheets.readonly'] });
-  const sheets = google.sheets({ version: 'v4', auth });
-  const tab = async () => (await sheets.spreadsheets.get({ spreadsheetId: config.spreadsheetId,
-    fields: 'sheets(properties(sheetId,title,sheetType,gridProperties(rowCount,columnCount)))' })).data.sheets?.find((s) => s.properties?.title === 'Category_Memory')?.properties;
+  const authStarted = performance.now();
+  const sheets = await getGoogleSheetsClient(config, write ? 'write' : 'readonly');
+  logReadTiming('client', authStarted);
+  const tab = async () => {
+    const started = performance.now();
+    const result = await sheets.spreadsheets.get({ spreadsheetId: config.spreadsheetId,
+      fields: 'sheets(properties(sheetId,title,sheetType,gridProperties(rowCount,columnCount)))' });
+    logReadTiming('metadata', started);
+    return result.data.sheets?.find((s) => s.properties?.title === 'Category_Memory')?.properties;
+  };
   const port: MemoryPort = {
     readFinance: reader.readFinance,
     async readCommands() {
@@ -83,8 +88,10 @@ export async function makeCategoryMemoryPort(config: GoogleConfiguration, write:
       const rows = p.gridProperties?.rowCount ?? 0, columns = p.gridProperties?.columnCount ?? 0;
       if (p.sheetType !== 'GRID' || !rows || rows > 50001 || columns < MEMORY_HEADERS.length) throw new Error('CATEGORY_MEMORY_SCHEMA_MISMATCH');
       // Read one extra column when present so stray data beside the log fails closed.
+      const started = performance.now();
       const response = await sheets.spreadsheets.values.get({ spreadsheetId: config.spreadsheetId,
         range: `'Category_Memory'!A1:${columns > MEMORY_HEADERS.length ? 'G' : 'F'}${rows}`, valueRenderOption: 'UNFORMATTED_VALUE' });
+      logReadTiming('valuesGet', started);
       return response.data.values ?? [];
     },
     async append(row, id) {
