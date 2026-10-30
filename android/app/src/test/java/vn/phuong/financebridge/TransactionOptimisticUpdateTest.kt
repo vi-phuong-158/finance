@@ -92,6 +92,21 @@ class TransactionOptimisticUpdateTest {
     }
 
     @Test
+    fun applyForInternalTransferCategoryAlwaysForcesExcludedToTrue() {
+        val original = sampleTransaction()
+        val fields = EditFields(
+            type = "CHI",
+            category = "Chuyển nội bộ",
+            note = "Chuyển tiền tiết kiệm",
+            excluded = false,
+        )
+        val updated = TransactionOptimisticUpdate.apply(original, fields)
+        assertEquals("Chuyển nội bộ", updated.category)
+        assertTrue(updated.excluded)
+        assertTrue(updated.pendingSync)
+    }
+
+    @Test
     fun parseEditPayloadParsesValidJsonAndReturnsNullForInvalid() {
         val json = """{"type":"CHI","category":"Ăn uống","note":"Phở","excluded":false}"""
         val parsed = TransactionOptimisticUpdate.parseEditPayload(json)

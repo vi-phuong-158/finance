@@ -33,12 +33,14 @@ object TransactionOptimisticUpdate {
             includeSign = true,
             isIncome = newType == TransactionType.THU,
         )
+        val isInternalTransfer = fields.category == "Chuyển nội bộ"
+        val excluded = if (isInternalTransfer) true else fields.excluded
         return original.copy(
             type = newType,
             formattedAmount = formattedAmount,
             category = fields.category,
             note = fields.note,
-            excluded = fields.excluded,
+            excluded = excluded,
             pendingSync = true,
             blocked = false,
         )
