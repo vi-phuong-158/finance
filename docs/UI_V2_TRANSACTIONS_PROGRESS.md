@@ -43,3 +43,21 @@
   - In `TransactionOptimisticUpdate.apply`, `category == "Chuyển nội bộ"` automatically forces `excluded = true` to match server rules.
   - Added JVM test `applyForInternalTransferCategoryAlwaysForcesExcludedToTrue`.
 - **Validation:** 101/101 JVM unit tests passing (0 failures, 0 ignored, exceeding target >= 92), 45 actionable tasks executed, 7 webhook configuration policy checks passed, clean `assembleDebug` APK build.
+
+## Milestone 4: Redesign transaction detail sheet & edit form (PROMPT 11, 31/10/2026)
+- **Sheet chi tiết (Commit 741827a):**
+  - Phần đầu: Ô icon danh mục 48dp có nền tròn màu CategoryVisuals (alpha ~0.15). Bên phải là số tiền có dấu (+/−) dùng AmountText autoShrink (sàn 70%, \u00A0đ, không cắt "..."). Dưới số tiền là tên danh mục, chip Thu/Chi, cùng nhãn "Đang chờ đồng bộ" / "Cần xử lý" bảo toàn từ vòng 4.
+  - Thẻ thông tin (Surface bo 16dp, border mảnh): Các dòng >=56dp gồm icon dẫn (Tài khoản: ví, Thời gian: lịch, Nguồn: icon theo nguồn, Báo cáo: biểu đồ), caption ở trên và giá trị ở dưới, ngăn cách bằng HorizontalDivider mảnh. Dòng mô tả/ghi chú riêng biệt kèm nút "Xem đầy đủ" / "Thu gọn".
+  - Cảnh báo: Đổi cảnh báo "Có thể trùng…" và "Chưa mở chỉnh sửa…" thành banner tonal bo góc có icon cảnh báo/thông tin, không dùng chữ đỏ trơn.
+  - Nút "Sửa" cố định ở đáy sheet (Surface elevation 2dp), thân sheet cuộn độc lập không trôi nút.
+- **Form sửa TransactionEditForm (Commit 1e23b22):**
+  - Thẻ đầu chỉ đọc: Hiển thị icon tròn 48dp, số tiền có dấu và tài khoản (không cho sửa số tiền).
+  - SegmentedButton Thu/Chi đặt ngay dưới thẻ đầu.
+  - Lưới CategoryTile: Ô đang chọn có viền 2dp và nền tonal theo màu danh mục (alpha 0.16), chữ đậm cùng màu tint. Giữ nguyên khối "Danh mục đề xuất" Phase C.
+  - Thẻ ghi chú & báo cáo: Ô ghi chú có icon dẫn; công tắc "Không tính vào báo cáo" là dòng ListItem có Switch trong cùng thẻ.
+  - Thanh đáy cố định: Hai nút "Hủy" (outlined) và "Lưu thay đổi" (filled) weight 1:1, hỗ trợ imePadding và navigationBarsPadding (bàn phím mở không che nút). Giữ nguyên khóa Lưu khi đang xác minh revision (P4) và hiển thị thông báo tiến trình. Không thêm nút Xóa.
+- **Tách hàm thuần & Test JVM (Commit be25571):**
+  - Tách `amountWithSign(type, amount)`, `sourceLabel(source)`, `reportStatusLabel(excluded)` sang `TransactionDetailPresentation.kt`.
+  - Bổ sung 5 test case mới trong `TransactionDetailPresentationTest.kt`, kiểm tra toàn diện các nhánh kiểu enum/chuỗi, số âm/0, nguồn dữ liệu và cờ loại trừ.
+- **Validation:** 106/106 JVM unit tests passing (0 failures, 0 ignored, tăng từ 101), 45/45 actionable tasks executed, 7 webhook configuration policy checks passed, APK `assembleDebug` build clean.
+
