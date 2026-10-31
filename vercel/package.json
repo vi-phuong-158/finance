@@ -12,7 +12,8 @@
     "moneylover:import": "node --env-file-if-exists=.env.local --import tsx scripts/import-moneylover.ts",
     "transactions:migrate": "node --env-file-if-exists=.env.local --import tsx scripts/migrate-transactions.ts",
     "audit:prepare": "node --env-file-if-exists=.env.local --import tsx scripts/prepare-finance-audit.ts",
-    "loans:import": "node --env-file-if-exists=.env.local --import tsx scripts/import-loans.ts"
+    "loans:import": "node --env-file-if-exists=.env.local --import tsx scripts/import-loans.ts",
+    "own-account:digest": "node --env-file-if-exists=.env.local --import tsx scripts/own-account-digest.ts"
   },
   "dependencies": {
     "googleapis": "^144.0.0"

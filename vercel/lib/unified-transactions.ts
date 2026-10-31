@@ -3,7 +3,14 @@ import { canonicalBankCategory, CATEGORY_REGISTRY } from './categories.js';
 import { EDIT_HEADERS } from './edit-schema.js';
 import { HISTORY_HEADERS, maskHistoryText, minorUnits, validDate } from './moneylover/schema.js';
 import { isExcludedHistoryRow, isSavingsWallet, readHistoryRow } from './moneylover/history-reader.js';
+import { readAccountIdentities } from './category-memory.js';
 import type { Bank } from './transaction-service.js';
+import type { OwnAccounts } from './configuration.js';
+
+export type InternalTransferMetadata = {
+  pairId: string;
+  role: 'OUT' | 'IN';
+};
 
 export type UnifiedTransaction = {
   id: string; date: string; time: string | null; datePrecision: 'DAY' | 'MINUTE';
@@ -13,10 +20,11 @@ export type UnifiedTransaction = {
   source: 'BANK_NOTIFICATION' | 'MONEYLOVER' | 'MANUAL'; excludedFromReport: boolean;
   possibleDuplicate: boolean; possibleDuplicateCount: number;
   revision: string;
+  internalTransfer?: InternalTransferMetadata | null;
 };
 export type FinanceSnapshot = { bank: unknown[][]; history: unknown[][]; edits?: unknown[][]; identities?: unknown[][] };
 export type FinanceReadPort = { readFinance: () => Promise<FinanceSnapshot> };
-export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransaction[] {
+export function fromFinanceSnapshot(snapshot: FinanceSnapshot, ownAccounts: OwnAccounts = {}): UnifiedTransaction[] {
   if (!hasTransactionHeaders(snapshot.bank[0] ?? [])
     || !hasExpectedHeaders(snapshot.history[0] ?? [], HISTORY_HEADERS)) throw new Error('FINANCE_SCHEMA_MISMATCH');
   const rows: UnifiedTransaction[] = [];
@@ -47,11 +55,14 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransacti
     const date = `${match[3]}-${match[2]}-${match[1]}`, time = `${match[4]}:${match[5]}`;
     if (!validDate(date) || Number(match[4]) > 23 || Number(match[5]) > 59) throw new Error('INVALID_FINANCE_ROW');
     const canonical = canonicalBankCategory(text(category));
+    const rawAccount = text(account).trim();
+    const effectiveAccount = rawAccount === text(bank) ? '' : rawAccount;
+    const bankAccount = effectiveAccount || ownAccounts[bank as Bank]?.label || text(bank);
     rows.push({ id: `${manual ? 'manual' : 'bank'}:${id}`, date, time: `${date}T${time}:00+07:00`, datePrecision: 'MINUTE', type,
       amount, currency: 'VND', category: canonical, originalCategory: text(category),
-      accountOrWallet: manual ? text(account) : text(bank), bank: bank === 'CASH' ? null : bank as Bank, counterparty: text(party) || null,
+      accountOrWallet: manual ? text(account) : bankAccount, bank: bank === 'CASH' ? null : bank as Bank, counterparty: text(party) || null,
       description: text(description) || null, event: null, source: manual ? 'MANUAL' : 'BANK_NOTIFICATION', excludedFromReport: canonical === 'Chuyển nội bộ',
-      possibleDuplicate: false, possibleDuplicateCount: 0, revision: '0' });
+      possibleDuplicate: false, possibleDuplicateCount: 0, revision: '0', internalTransfer: null });
   }
   if (new Set(rows.map((t) => t.id)).size !== rows.length) throw new Error('DUPLICATE_FINANCE_ID');
   if (snapshot.edits) {
@@ -70,6 +81,75 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot): UnifiedTransacti
       target.type = type; target.excludedFromReport = excluded || category === 'Chuyển nội bộ';
     }
   }
+
+  const identities = snapshot.identities ? readAccountIdentities(snapshot.identities) : new Map();
+  type AnchorInfo = { tx: UnifiedTransaction; targetBank: string };
+  const anchors: AnchorInfo[] = [];
+  for (const t of rows) {
+    if (t.source !== 'BANK_NOTIFICATION' || !t.bank || !t.time) continue;
+    // R1: Anchor is valid only if revision === '0' or its category is still 'Chuyển nội bộ'
+    if (t.revision !== '0' && t.category !== 'Chuyển nội bộ') continue;
+    const iden = identities.get(t.id);
+    if (!iden || !iden.key.startsWith('ACCOUNT:')) continue;
+    const digest = iden.key.slice('ACCOUNT:'.length);
+    for (const [ownBank, config] of Object.entries(ownAccounts)) {
+      if (ownBank !== t.bank && config?.digest === digest) {
+        anchors.push({ tx: t, targetBank: ownBank });
+        break;
+      }
+    }
+  }
+
+  if (anchors.length > 0) {
+    const candidateMap = new Map<UnifiedTransaction, UnifiedTransaction[]>();
+    const reverseMap = new Map<UnifiedTransaction, UnifiedTransaction[]>();
+    for (const a of anchors) {
+      // R2 & K3: Candidate must have revision === '0' and not already be 'Chuyển nội bộ'
+      const candidates = rows.filter((c) => (
+        c !== a.tx
+        && c.source === 'BANK_NOTIFICATION'
+        && c.bank === a.targetBank
+        && c.type !== a.tx.type
+        && c.amount === a.tx.amount
+        && c.time != null
+        && c.revision === '0'
+        && c.category !== 'Chuyển nội bộ'
+        && Math.abs(Date.parse(c.time) - Date.parse(a.tx.time!)) <= 30 * 60 * 1000
+      ));
+      candidateMap.set(a.tx, candidates);
+      for (const c of candidates) {
+        reverseMap.set(c, [...(reverseMap.get(c) ?? []), a.tx]);
+      }
+    }
+
+    const paired = new Set<string>();
+    for (const a of anchors) {
+      const candidates = candidateMap.get(a.tx) ?? [];
+      if (candidates.length !== 1) continue;
+      const c = candidates[0];
+      const matchingAnchors = reverseMap.get(c) ?? [];
+      const isMutual = candidateMap.get(c)?.length === 1 && candidateMap.get(c)![0] === a.tx;
+      if (matchingAnchors.length !== 1 && !isMutual) continue;
+      if (paired.has(a.tx.id) || paired.has(c.id)) continue;
+
+      paired.add(a.tx.id);
+      paired.add(c.id);
+      const outTx = a.tx.type === 'CHI' ? a.tx : c;
+      const inTx = a.tx.type === 'THU' ? a.tx : c;
+      const pairId = `${outTx.id}<->${inTx.id}`;
+      outTx.internalTransfer = { pairId, role: 'OUT' };
+      inTx.internalTransfer = { pairId, role: 'IN' };
+      if (outTx.revision === '0') {
+        outTx.category = 'Chuyển nội bộ';
+        outTx.excludedFromReport = true;
+      }
+      if (inTx.revision === '0') {
+        inTx.category = 'Chuyển nội bộ';
+        inTx.excludedFromReport = true;
+      }
+    }
+  }
+
   // Validate edit chains before hiding a savings record, so its edits are not orphaned.
   const visibleRows = rows.filter((t) => t.source !== 'MONEYLOVER' || !isSavingsWallet(t.accountOrWallet ?? ''));
   const groups = new Map<string, { bank: number; history: number }>();

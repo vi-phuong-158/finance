@@ -32,3 +32,28 @@ export function validWebhookUrl(value: string): boolean {
       && !url.search && !url.hash && url.pathname === '/api/transaction';
   } catch { return false; }
 }
+
+export type OwnAccount = { digest: string; label: string };
+export type OwnAccounts = Partial<Record<'VCB' | 'BIDV' | 'VIETINBANK', OwnAccount>>;
+
+export function readOwnAccounts(env: Environment): OwnAccounts {
+  const raw = env.OWN_ACCOUNT_DIGESTS;
+  if (!raw || typeof raw !== 'string') return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const result: OwnAccounts = {};
+    for (const [bank, config] of Object.entries(parsed)) {
+      if (!['VCB', 'BIDV', 'VIETINBANK'].includes(bank)) continue;
+      if (!config || typeof config !== 'object') continue;
+      const { digest, label } = config as Record<string, unknown>;
+      if (typeof digest === 'string' && /^[a-f0-9]{32}$/.test(digest)
+        && typeof label === 'string' && label.trim().length > 0 && label.length <= 120 && !/[\t\r\n|]/.test(label)) {
+        result[bank as 'VCB' | 'BIDV' | 'VIETINBANK'] = { digest, label: label.trim() };
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}

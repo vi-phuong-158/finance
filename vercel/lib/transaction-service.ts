@@ -6,9 +6,9 @@ import { parseBidv } from '../parsers/bidv.js';
 import { parseVcb } from '../parsers/vcb.js';
 import { parseVietinbank } from '../parsers/vietinbank.js';
 import { timingSafeEqual } from 'node:crypto';
-import { configurationIsValid, readGoogleConfiguration } from './configuration.js';
+import { configurationIsValid, readGoogleConfiguration, readOwnAccounts } from './configuration.js';
 import { accountIdentity, accountIdentityKey } from './category-memory.js';
-import { hasExpectedHeaders, hasTransactionHeaders, TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
+import { hasExpectedHeaders, hasTransactionHeaders, TRANSACTION_HEADERS, TRANSACTION_HEADERS_V2, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
 export { TRANSACTION_HEADERS, RAW_CAPTURE_HEADERS } from './sheet-schema.js';
 
 export type Bank = 'VCB' | 'VIETINBANK' | 'BIDV';
@@ -166,11 +166,27 @@ async function validateAndProcessTransactionInternal(
     }
 
     if (parsed) {
-      const category = matchCategory(`${parsed.counterparty} ${parsed.description}`, parsed.type);
+      const ownAccounts = readOwnAccounts(env);
+      const bankConfig = ownAccounts[bank];
+      const accountLabel = bankConfig?.label ?? '';
+
+      let category = matchCategory(`${parsed.counterparty} ${parsed.description}`, parsed.type);
       // Only here is the counterparty account still unmasked; only its keyed HMAC leaves this function.
       const hmacKey = accountIdentityKey(env);
       const account = hmacKey ? accountIdentity(normalizedText, parsed.type, hmacKey) : null;
-      const saved = await sheets.appendTransaction([
+
+      if (account) {
+        const counterpartyDigest = account.key.slice('ACCOUNT:'.length);
+        const isInternalTransfer = Object.entries(ownAccounts).some(
+          ([ownBank, config]) => ownBank !== bank && config?.digest === counterpartyDigest
+        );
+        if (isInternalTransfer) {
+          category = 'Chuyển nội bộ';
+        }
+      }
+
+      const isV2 = hasExpectedHeaders(headers.transaction, TRANSACTION_HEADERS_V2);
+      const row = [
         parsed.time,
         bank,
         parsed.type,
@@ -180,7 +196,13 @@ async function validateAndProcessTransactionInternal(
         maskSensitiveIdentifiers(parsed.description),
         category,
         eventId,
-      ], account ? [eventId, account.key, account.label, new Date().toISOString()] : null);
+        ...(isV2 ? ['BANK_NOTIFICATION', accountLabel] : []),
+      ];
+
+      const saved = await sheets.appendTransaction(
+        row,
+        account ? [eventId, account.key, account.label, new Date().toISOString()] : null
+      );
 
       return { httpStatus: 200, body: { status: saved === 'DUPLICATE' ? 'DUPLICATE_IGNORED' : 'SAVED_TRANSACTION', eventId } };
     }

@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getGoogleSheetsClient, logReadTiming } from './google-read-client.js';
-import { configurationIsValid, readGoogleConfiguration } from './configuration.js';
+import { configurationIsValid, readGoogleConfiguration, readOwnAccounts } from './configuration.js';
 import type { Environment, GoogleConfiguration } from './configuration.js';
 import type { FinanceSnapshot } from './unified-transactions.js';
 import { atomicAppendRequests, guardedAppend } from './atomic-append.js';
@@ -33,7 +33,9 @@ export async function handleCategoryMemoryRequest(request: MemoryRequest, env: E
     try {
       const port = await makePort(readGoogleConfiguration(env)!, false);
       const [snapshot, rows] = await Promise.all([port.readFinance(), port.readCommands()]);
-      const rules = buildMemoryIndex(memoryObservations(snapshot), readMemoryCommands(rows));
+      const ownAccounts = readOwnAccounts(env);
+      const ownDigests = new Set(Object.values(ownAccounts).map((a) => a.digest));
+      const rules = buildMemoryIndex(memoryObservations(snapshot), readMemoryCommands(rows), ownDigests);
       return { httpStatus: 200, body: { version: 1, enabled: true, writesEnabled: writesEnabled && rows !== null,
         generatedAt: now.toISOString(), window: MEMORY_WINDOW, rules,
         categories: CATEGORY_REGISTRY.filter((c) => c.active && c.name !== 'Chưa phân loại').map((c) => ({ name: c.name, type: c.type })) } as Record<string, unknown> };

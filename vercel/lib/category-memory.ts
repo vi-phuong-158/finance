@@ -103,11 +103,15 @@ export function extractCounterpartyAccount(text: string, type: 'THU' | 'CHI'): {
   return { account, bank: bank && BANK_SUFFIXES.has(bank) ? bank : null };
 }
 
+export function ownAccountDigest(account: string, hmacKey: Buffer): string {
+  return createHmac('sha256', hmacKey).update(`ACCOUNT:${account}`).digest('hex').slice(0, 32);
+}
+
 export function accountIdentity(text: string, type: 'THU' | 'CHI', hmacKey: Buffer): Identity | null {
   const found = extractCounterpartyAccount(text, type);
   if (!found) return null;
   // Accounts are low-entropy: keyed HMAC so neither the Sheet nor the client cache can reverse them.
-  const digest = createHmac('sha256', hmacKey).update(`ACCOUNT:${found.account}`).digest('hex').slice(0, 32);
+  const digest = ownAccountDigest(found.account, hmacKey);
   const name = extractBankParty(text, type)?.name;
   return { type: 'ACCOUNT', key: `ACCOUNT:${digest}`, label: `${name || 'Tài khoản'}${found.bank ? ` · ${found.bank}` : ''} ••${found.account.slice(-4)}` };
 }

@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { configurationIsValid, readGoogleConfiguration } from './configuration.js';
+import { configurationIsValid, readGoogleConfiguration, readOwnAccounts } from './configuration.js';
 import type { Environment, GoogleConfiguration } from './configuration.js';
 import { fromFinanceSnapshot } from './unified-transactions.js';
 import type { FinanceReadPort } from './unified-transactions.js';
@@ -22,7 +22,8 @@ export async function readFinance(request: ReadRequest, env: Environment,
     const query = parseFinanceQuery(request.query ?? {}, endpoint === 'dashboard', now);
     const port = await makePort(readGoogleConfiguration(env)!);
     const snapshot = await port.readFinance();
-    const rows = filterTransactions(fromFinanceSnapshot(snapshot), query);
+    const ownAccounts = readOwnAccounts(env);
+    const rows = filterTransactions(fromFinanceSnapshot(snapshot, ownAccounts), query);
     if (endpoint === 'dashboard') return { httpStatus: 200, body: buildDashboard(rows, query, now) };
     const page = paginateTransactions(rows, query, env.WEBHOOK_SECRET!);
     if (env.CATEGORY_MEMORY_ENABLED === '1') {
