@@ -7,12 +7,21 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,6 +34,7 @@ import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.FinancePeriod
+import vn.phuong.financebridge.ui.util.FinanceFormatters
 import vn.phuong.financebridge.ui.util.CategoryVisuals
 import vn.phuong.financebridge.EditFields
 import vn.phuong.financebridge.CategoryMemory
@@ -243,31 +253,345 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
                         savedMessage = "Đã lưu trên máy. Đang chờ đồng bộ."
                     })
             } else {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(CategoryVisuals.icon(transaction.category), null,
-                            tint = CategoryVisuals.color(transaction.category, FinanceTheme.colors))
-                        Column {
-                            Text(transaction.formattedAmount, style = FinanceTheme.typography.titleLarge,
-                                color = if (transaction.type == TransactionType.THU) FinanceTheme.colors.income else FinanceTheme.colors.expense)
-                            Text(transaction.category, style = FinanceTheme.typography.titleMedium)
+                val categoryColor = CategoryVisuals.color(transaction.category, FinanceTheme.colors)
+                val categoryIcon = CategoryVisuals.icon(transaction.category)
+                val isIncome = transaction.type == TransactionType.THU
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // 1a. Phần đầu: icon tròn 48dp, số tiền có dấu autoShrink, danh mục & chip Thu/Chi + trạng thái
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(categoryColor.copy(alpha = 0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = categoryIcon,
+                                    contentDescription = transaction.category,
+                                    tint = categoryColor,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                AmountText(
+                                    amountText = amountWithSign(transaction.type, transaction.amount),
+                                    type = transaction.type,
+                                    style = FinanceTheme.typography.headlineLarge,
+                                    autoShrink = true
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = transaction.category,
+                                        style = FinanceTheme.typography.titleMedium,
+                                        color = FinanceTheme.colors.textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    Surface(
+                                        shape = FinanceTheme.shapes.pill,
+                                        color = if (isIncome) FinanceTheme.colors.income.copy(alpha = 0.12f) else FinanceTheme.colors.expense.copy(alpha = 0.12f)
+                                    ) {
+                                        Text(
+                                            text = if (isIncome) "Thu" else "Chi",
+                                            style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
+                                            color = if (isIncome) FinanceTheme.colors.income else FinanceTheme.colors.expense,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    if (transaction.pendingSync) {
+                                        Surface(
+                                            shape = FinanceTheme.shapes.pill,
+                                            color = FinanceTheme.colors.primaryContainer
+                                        ) {
+                                            Text(
+                                                text = "Đang chờ đồng bộ",
+                                                style = FinanceTheme.typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                                                color = FinanceTheme.colors.primary,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else if (transaction.blocked) {
+                                        Surface(
+                                            shape = FinanceTheme.shapes.pill,
+                                            color = FinanceTheme.colors.warning.copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = "Cần xử lý",
+                                                style = FinanceTheme.typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                                                color = FinanceTheme.colors.warning,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 1b. Thẻ thông tin bo 16dp: mỗi dòng cao >= 56dp, icon dẫn, divider mảnh, mô tả có "Xem đầy đủ"
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = FinanceTheme.shapes.medium,
+                            color = FinanceTheme.colors.surfaceCard,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, FinanceTheme.colors.borderGlass)
+                        ) {
+                            Column {
+                                DetailInfoItem(
+                                    icon = Icons.Rounded.AccountBalanceWallet,
+                                    label = "Tài khoản",
+                                    value = transaction.accountOrBank
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    thickness = 0.5.dp,
+                                    color = FinanceTheme.colors.borderGlass
+                                )
+                                DetailInfoItem(
+                                    icon = Icons.Rounded.CalendarToday,
+                                    label = "Thời gian",
+                                    value = transaction.formattedDate
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    thickness = 0.5.dp,
+                                    color = FinanceTheme.colors.borderGlass
+                                )
+                                DetailInfoItem(
+                                    icon = when (transaction.source) {
+                                        "MONEYLOVER" -> Icons.Rounded.History
+                                        "MANUAL" -> Icons.Rounded.Edit
+                                        else -> Icons.Rounded.Notifications
+                                    },
+                                    label = "Nguồn",
+                                    value = sourceLabel(transaction.source)
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    thickness = 0.5.dp,
+                                    color = FinanceTheme.colors.borderGlass
+                                )
+                                DetailInfoItem(
+                                    icon = Icons.Rounded.BarChart,
+                                    label = "Báo cáo",
+                                    value = reportStatusLabel(transaction.excluded)
+                                )
+                                if (transaction.title.isNotBlank()) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                        thickness = 0.5.dp,
+                                        color = FinanceTheme.colors.borderGlass
+                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .defaultMinSize(minHeight = 56.dp)
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.Top,
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Description,
+                                            contentDescription = null,
+                                            tint = FinanceTheme.colors.textSecondary,
+                                            modifier = Modifier.size(24.dp).padding(top = 2.dp)
+                                        )
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = "Mô tả / Ghi chú",
+                                                style = FinanceTheme.typography.caption,
+                                                color = FinanceTheme.colors.textSecondary
+                                            )
+                                            Text(
+                                                text = transaction.title,
+                                                style = FinanceTheme.typography.bodyMedium,
+                                                color = FinanceTheme.colors.textPrimary,
+                                                maxLines = if (expandedDescription) Int.MAX_VALUE else 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            TextButton(
+                                                onClick = { expandedDescription = !expandedDescription },
+                                                contentPadding = PaddingValues(0.dp),
+                                                modifier = Modifier.height(28.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (expandedDescription) "Thu gọn" else "Xem đầy đủ",
+                                                    style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
+                                                    color = FinanceTheme.colors.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 1c. Cảnh báo trùng & chưa mở chỉnh sửa dạng banner tonal có icon
+                        if (transaction.isDuplicateCandidate) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = FinanceTheme.shapes.medium,
+                                color = FinanceTheme.colors.warning.copy(alpha = 0.12f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, FinanceTheme.colors.warning.copy(alpha = 0.3f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Warning,
+                                        contentDescription = null,
+                                        tint = FinanceTheme.colors.warning,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Có thể trùng giao dịch từ nguồn khác. Cần đối soát.",
+                                        style = FinanceTheme.typography.bodyMedium,
+                                        color = if (FinanceTheme.colors.isDark) Color(0xFFFFD580) else Color(0xFF8A5300)
+                                    )
+                                }
+                            }
+                        }
+                        if (!editingEnabled) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = FinanceTheme.shapes.medium,
+                                color = FinanceTheme.colors.info.copy(alpha = 0.12f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, FinanceTheme.colors.info.copy(alpha = 0.25f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Info,
+                                        contentDescription = null,
+                                        tint = FinanceTheme.colors.info,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Chưa mở chỉnh sửa trên máy chủ.",
+                                        style = FinanceTheme.typography.bodyMedium,
+                                        color = if (FinanceTheme.colors.isDark) Color(0xFF8CE1BE) else Color(0xFF0F5A40)
+                                    )
+                                }
+                            }
                         }
                     }
-                    Text(transaction.title, maxLines = if (expandedDescription) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
-                    if (transaction.title.isNotBlank()) TextButton(onClick = { expandedDescription = !expandedDescription }) { Text(if (expandedDescription) "Thu gọn" else "Xem đầy đủ") }
-                    Row(Modifier.fillMaxWidth()) {
-                        Column(Modifier.weight(1f)) { Text("Tài khoản", style = FinanceTheme.typography.caption); Text(transaction.accountOrBank) }
-                        Column(Modifier.weight(1f)) { Text("Thời gian", style = FinanceTheme.typography.caption); Text(transaction.formattedDate) }
+
+                    // 1d. Nút Sửa cố định ở đáy sheet
+                    if (editingEnabled) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = FinanceTheme.colors.surface,
+                            tonalElevation = 2.dp
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                            ) {
+                                Button(
+                                    enabled = !opening,
+                                    onClick = { editRequested = true },
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    shape = FinanceTheme.shapes.medium
+                                ) {
+                                    Text(if (opening) "Đang tải…" else "Sửa")
+                                }
+                            }
+                        }
                     }
-                    Row(Modifier.fillMaxWidth()) {
-                        Column(Modifier.weight(1f)) { Text("Nguồn", style = FinanceTheme.typography.caption); Text(when (transaction.source) { "MONEYLOVER" -> "Nhập lịch sử"; "MANUAL" -> "Ghi chép thủ công"; else -> "Thông báo ngân hàng" }) }
-                        Column(Modifier.weight(1f)) { Text("Trạng thái", style = FinanceTheme.typography.caption); Text(if (transaction.excluded) "Không tính vào báo cáo" else "Tính vào báo cáo") }
-                    }
-                    if (transaction.isDuplicateCandidate) Text("Có thể trùng giao dịch từ nguồn khác. Cần đối soát.", color = FinanceTheme.colors.expense)
-                    if (!editingEnabled) Text("Chưa mở chỉnh sửa trên máy chủ.", style = FinanceTheme.typography.caption)
-                    if (editingEnabled) Button(enabled = !opening, onClick = { editRequested = true }, modifier = Modifier.fillMaxWidth()) { Text(if (opening) "Đang tải…" else "Sửa") }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun DetailInfoItem(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = FinanceTheme.colors.textSecondary,
+            modifier = Modifier.size(24.dp),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = label,
+                style = FinanceTheme.typography.caption,
+                color = FinanceTheme.colors.textSecondary,
+            )
+            Text(
+                text = value,
+                style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = FinanceTheme.colors.textPrimary,
+            )
+        }
+    }
+}
+
+internal fun amountWithSign(type: TransactionType, amount: Long): String =
+    FinanceFormatters.formatVnd(amount, includeSign = true, isIncome = type == TransactionType.THU)
+
+internal fun amountWithSign(type: String, amount: Long): String {
+    val isIncome = when (type.trim().uppercase()) {
+        "THU" -> true
+        "CHI" -> false
+        else -> null
+    }
+    return FinanceFormatters.formatVnd(amount, includeSign = true, isIncome = isIncome)
+}
+
+internal fun sourceLabel(source: String?): String = when (source) {
+    "MONEYLOVER" -> "Nhập lịch sử"
+    "MANUAL" -> "Ghi chép thủ công"
+    else -> "Thông báo ngân hàng"
+}
+
+internal fun reportStatusLabel(excluded: Boolean): String =
+    if (excluded) "Không tính vào báo cáo" else "Tính vào báo cáo"
+
