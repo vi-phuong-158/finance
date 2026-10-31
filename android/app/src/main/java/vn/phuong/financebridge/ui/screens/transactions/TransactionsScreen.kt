@@ -36,6 +36,10 @@ import vn.phuong.financebridge.ui.theme.FinanceTheme
 import vn.phuong.financebridge.ui.util.FinancePeriod
 import vn.phuong.financebridge.ui.util.FinanceFormatters
 import vn.phuong.financebridge.ui.util.CategoryVisuals
+import vn.phuong.financebridge.ui.util.HistoryPeriodPreset
+import vn.phuong.financebridge.ui.util.ReportPeriodHelper
+import vn.phuong.financebridge.ui.screens.reports.CategoryHistoryScreen
+import androidx.compose.foundation.clickable
 import vn.phuong.financebridge.EditFields
 import vn.phuong.financebridge.CategoryMemory
 import vn.phuong.financebridge.CategoryChoice
@@ -81,6 +85,19 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
     var savedMessage by remember { mutableStateOf<String?>(null) }
     val memoryRepository = remember(context) { CategoryMemoryRepository(context) }
     var memory by remember { mutableStateOf<CategoryMemoryIndex?>(null) }
+    var historyTargetCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var historyTargetIsIncome by rememberSaveable { mutableStateOf(false) }
+
+    if (historyTargetCategory != null) {
+        CategoryHistoryScreen(
+            context = context,
+            category = historyTargetCategory!!,
+            isIncome = historyTargetIsIncome,
+            defaultPreset = HistoryPeriodPreset.SIX_MONTHS,
+            onBack = { historyTargetCategory = null }
+        )
+        return
+    }
 
     LaunchedEffect(initialTransactionId) {
         if (initialTransactionId != null) {
@@ -398,6 +415,34 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
                                     label = "Báo cáo",
                                     value = reportStatusLabel(transaction.excluded)
                                 )
+                                if (ReportPeriodHelper.isValidCategoryForHistory(transaction.category)) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                        thickness = 0.5.dp,
+                                        color = FinanceTheme.colors.borderGlass
+                                    )
+                                    DetailInfoItem(
+                                        icon = Icons.Rounded.Timeline,
+                                        label = "Lịch sử danh mục",
+                                        value = "Xem lịch sử ${transaction.category}",
+                                        onClick = {
+                                            val cat = transaction.category
+                                            val inc = transaction.type == TransactionType.THU
+                                            selected = null
+                                            selectedId = null
+                                            historyTargetCategory = cat
+                                            historyTargetIsIncome = inc
+                                        },
+                                        trailing = {
+                                            Icon(
+                                                imageVector = Icons.Rounded.ChevronRight,
+                                                contentDescription = "Xem lịch sử",
+                                                tint = FinanceTheme.colors.textSecondary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    )
+                                }
                                 if (transaction.title.isNotBlank()) {
                                     HorizontalDivider(
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -536,16 +581,19 @@ fun TransactionsScreen(context: Context, modifier: Modifier = Modifier, initialT
 }
 
 @Composable
-private fun DetailInfoItem(
+fun DetailInfoItem(
     icon: ImageVector,
     label: String,
     value: String,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 56.dp)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -571,6 +619,7 @@ private fun DetailInfoItem(
                 color = FinanceTheme.colors.textPrimary,
             )
         }
+        trailing?.invoke()
     }
 }
 
