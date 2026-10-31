@@ -574,24 +574,3 @@ private fun DetailInfoItem(
     }
 }
 
-internal fun amountWithSign(type: TransactionType, amount: Long): String =
-    FinanceFormatters.formatVnd(amount, includeSign = true, isIncome = type == TransactionType.THU)
-
-internal fun amountWithSign(type: String, amount: Long): String {
-    val isIncome = when (type.trim().uppercase()) {
-        "THU" -> true
-        "CHI" -> false
-        else -> null
-    }
-    return FinanceFormatters.formatVnd(amount, includeSign = true, isIncome = isIncome)
-}
-
-internal fun sourceLabel(source: String?): String = when (source) {
-    "MONEYLOVER" -> "Nhập lịch sử"
-    "MANUAL" -> "Ghi chép thủ công"
-    else -> "Thông báo ngân hàng"
-}
-
-internal fun reportStatusLabel(excluded: Boolean): String =
-    if (excluded) "Không tính vào báo cáo" else "Tính vào báo cáo"
-
