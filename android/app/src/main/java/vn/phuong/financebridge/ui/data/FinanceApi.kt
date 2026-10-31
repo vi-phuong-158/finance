@@ -5,7 +5,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import vn.phuong.financebridge.BuildConfig
@@ -16,12 +15,10 @@ import vn.phuong.financebridge.WebhookCredentialStore
 import vn.phuong.financebridge.ui.model.TransactionType
 import vn.phuong.financebridge.ui.model.UiTransaction
 import vn.phuong.financebridge.ui.util.FinanceFormatters
-import java.util.concurrent.TimeUnit
 
 class FinanceApi(context: Context) {
     private val credentials = WebhookCredentialStore(context.applicationContext)
-    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
+    private val client = UiReadHttpClient.client
 
     suspend fun <T> read(endpoint: String, query: Map<String, String> = emptyMap(), decode: (JSONObject) -> T): Result<T> =
         withContext(Dispatchers.IO) {
