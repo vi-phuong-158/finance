@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import vn.phuong.financebridge.ManualSyncWorker
 import vn.phuong.financebridge.ui.components.FinanceBottomBar
@@ -19,6 +20,7 @@ import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.screens.accounts.AccountsScreen
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardRepository
 import vn.phuong.financebridge.ui.screens.dashboard.DashboardScreen
+import vn.phuong.financebridge.ui.screens.interest.InterestRepository
 import vn.phuong.financebridge.ui.screens.interest.InterestScreen
 import vn.phuong.financebridge.ui.screens.more.MoreScreen
 import vn.phuong.financebridge.ui.screens.record.ExtendedTransactionType
@@ -27,6 +29,7 @@ import vn.phuong.financebridge.ui.screens.reports.ReportsScreen
 import vn.phuong.financebridge.ui.screens.transactions.TransactionsScreen
 import vn.phuong.financebridge.ui.theme.FinanceBridgeTheme
 import vn.phuong.financebridge.ui.theme.FinanceTheme
+import vn.phuong.financebridge.ui.util.MonthlySummaryUtil
 
 @Composable
 fun MainAppScreen(
@@ -41,11 +44,15 @@ fun MainAppScreen(
     var recordInitialType by rememberSaveable { mutableStateOf(ExtendedTransactionType.CHI) }
 
     val repository = remember(context) { DashboardRepository(context) }
+    val interestRepository = remember(context) { InterestRepository(context) }
     val scope = rememberCoroutineScope()
 
     var dashboardState by remember { mutableStateOf<UiDashboard?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var loanPrincipal by remember { mutableStateOf<Long?>(null) }
+    var hasLoans by remember { mutableStateOf(false) }
+    var isLoanError by remember { mutableStateOf(false) }
     var loadJob by remember { mutableStateOf<Job?>(null) }
 
     fun loadData() {
@@ -53,13 +60,28 @@ fun MainAppScreen(
         isLoading = true
         errorMessage = null
         loadJob = scope.launch {
-            val result = repository.fetchDashboard()
-            result.onSuccess { data ->
+            val dashQuery = MonthlySummaryUtil.compute5MonthQueryParams()
+            val dashDeferred = async { repository.fetchDashboard(dashQuery) }
+            val interestDeferred = async { interestRepository.fetch() }
+
+            val dashResult = dashDeferred.await()
+            dashResult.onSuccess { data ->
                 dashboardState = data
                 isLoading = false
             }.onFailure { err ->
                 errorMessage = err.message ?: "Không tải được dữ liệu"
                 isLoading = false
+            }
+
+            val interestResult = interestDeferred.await()
+            interestResult.onSuccess { interestData ->
+                loanPrincipal = interestData.principal
+                hasLoans = interestData.loans.isNotEmpty() || interestData.principal > 0L
+                isLoanError = false
+            }.onFailure {
+                loanPrincipal = null
+                hasLoans = true // Show "—" with "Chưa tải được" so user knows interest failed to load
+                isLoanError = true
             }
         }
     }
@@ -126,6 +148,10 @@ fun MainAppScreen(
                         onOpenInterest = { showInterest = true },
                         onOpenMemory = { currentTab = NavigationTab.MORE },
                         onOpenSync = { currentTab = NavigationTab.MORE },
+                        onOpenReports = { currentTab = NavigationTab.REPORTS },
+                        loanPrincipal = loanPrincipal,
+                        hasLoans = hasLoans,
+                        isLoanError = isLoanError,
                     )
 
                     NavigationTab.TRANSACTIONS -> TransactionsScreen(

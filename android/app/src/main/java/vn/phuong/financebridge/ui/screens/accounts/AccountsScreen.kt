@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Percent
 import androidx.compose.material3.*
@@ -19,7 +20,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import vn.phuong.financebridge.ui.components.FinanceCard
 import vn.phuong.financebridge.ui.theme.FinanceTheme
 
@@ -29,7 +29,6 @@ fun AccountsScreen(
     onViewInterest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -49,27 +48,49 @@ fun AccountsScreen(
         FinanceCard(
             modifier = Modifier.fillMaxWidth(),
             shape = FinanceTheme.shapes.xLarge,
-            contentPadding = 20.dp,
+            contentPadding = 18.dp,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Số dư tài khoản ngân hàng",
-                    style = FinanceTheme.typography.bodyMedium,
-                    color = FinanceTheme.colors.textSecondary,
-                )
-                Text(
-                    text = "Chưa có dữ liệu số dư",
-                    style = FinanceTheme.typography.titleMedium,
-                    color = FinanceTheme.colors.textPrimary,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "Dòng tiền thu chi được trình bày riêng tại Tổng quan.",
-                    style = FinanceTheme.typography.caption,
-                    color = FinanceTheme.colors.textMuted,
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(FinanceTheme.colors.primaryContainer, FinanceTheme.shapes.medium),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AccountBalanceWallet,
+                        contentDescription = "Tài khoản",
+                        tint = FinanceTheme.colors.primary,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = "Số dư tài khoản ngân hàng",
+                        style = FinanceTheme.typography.bodyMedium,
+                        color = FinanceTheme.colors.textSecondary,
+                    )
+                    Text(
+                        text = "Chưa có dữ liệu số dư",
+                        style = FinanceTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = FinanceTheme.colors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "Dòng tiền thu chi được trình bày riêng tại Tổng quan.",
+                        style = FinanceTheme.typography.caption,
+                        color = FinanceTheme.colors.textMuted,
+                    )
+                }
             }
         }
 
@@ -155,7 +176,6 @@ fun AccountsScreen(
 
         Spacer(modifier = Modifier.height(56.dp))
     }
-
 }
 
 @Composable

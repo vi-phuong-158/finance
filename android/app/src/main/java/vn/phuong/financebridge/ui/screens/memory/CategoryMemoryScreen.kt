@@ -7,7 +7,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -24,6 +26,7 @@ import vn.phuong.financebridge.ui.components.SecondaryButton
 import vn.phuong.financebridge.ui.data.CategoryMemoryRepository
 import vn.phuong.financebridge.ui.data.queueMutation
 import vn.phuong.financebridge.ui.theme.FinanceTheme
+import vn.phuong.financebridge.ui.util.CategoryVisuals
 import vn.phuong.financebridge.ui.util.FinanceFormatters
 import java.util.UUID
 
@@ -138,19 +141,70 @@ fun CategoryMemoryScreen(context: Context, modifier: Modifier = Modifier) {
 
 @Composable
 private fun MemoryRuleRow(rule: MemoryRule, writesEnabled: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
+    val icon = CategoryVisuals.icon(rule.category)
+    val tint = CategoryVisuals.color(rule.category, FinanceTheme.colors)
+    val bg = tint.copy(alpha = 0.12f)
+
     FinanceCard(modifier = Modifier.fillMaxWidth(), contentPadding = 14.dp) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(rule.label, style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = FinanceTheme.colors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("→ ${rule.category}", style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = FinanceTheme.colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val strength = when (rule.level) { "STRONG" -> "Chọn sẵn · rất thường dùng"; "PRESELECT" -> "Chọn sẵn"; "HINT" -> "Chỉ gợi ý"; else -> "Chưa chắc chắn" }
-            val lastUsed = runCatching { FinanceFormatters.formatFriendlyDate(java.time.Instant.parse(rule.lastUsedAt).toEpochMilli()) }.getOrDefault("")
-            Text("${if (rule.type == "THU") "Thu" else "Chi"} · ${rule.count}/${rule.total} lần gần đây · $strength${if (lastUsed.isNotEmpty()) " · $lastUsed" else ""}",
-                style = FinanceTheme.typography.caption, color = FinanceTheme.colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (writesEnabled) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                SecondaryButton(text = "Sửa", onClick = onEdit)
-                TextButton(onClick = onDelete) { Text("Xóa", color = FinanceTheme.colors.expense) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(FinanceTheme.shapes.medium)
+                    .background(bg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = rule.category,
+                    tint = tint,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = rule.label,
+                    style = FinanceTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = FinanceTheme.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "→ ${rule.category}",
+                    style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = FinanceTheme.colors.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val strength = when (rule.level) {
+                    "STRONG" -> "Chọn sẵn · rất thường dùng"
+                    "PRESELECT" -> "Chọn sẵn"
+                    "HINT" -> "Chỉ gợi ý"
+                    else -> "Chưa chắc chắn"
+                }
+                val lastUsed = runCatching {
+                    FinanceFormatters.formatFriendlyDate(java.time.Instant.parse(rule.lastUsedAt).toEpochMilli())
+                }.getOrDefault("")
+                Text(
+                    text = "${if (rule.type == "THU") "Thu" else "Chi"} · ${rule.count}/${rule.total} lần gần đây · $strength${if (lastUsed.isNotEmpty()) " · $lastUsed" else ""}",
+                    style = FinanceTheme.typography.caption,
+                    color = FinanceTheme.colors.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (writesEnabled) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SecondaryButton(text = "Sửa", onClick = onEdit)
+                        TextButton(onClick = onDelete) { Text("Xóa", color = FinanceTheme.colors.expense) }
+                    }
+                }
             }
         }
     }

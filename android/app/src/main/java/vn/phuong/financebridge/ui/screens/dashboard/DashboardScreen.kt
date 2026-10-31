@@ -11,6 +11,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +27,8 @@ import java.time.ZoneId
 import vn.phuong.financebridge.ui.components.*
 import vn.phuong.financebridge.ui.model.UiDashboard
 import vn.phuong.financebridge.ui.theme.FinanceTheme
+import vn.phuong.financebridge.ui.util.FinanceFormatters
+import vn.phuong.financebridge.ui.util.MonthlySummaryUtil
 import vn.phuong.financebridge.ui.util.WindowWidthTier
 import vn.phuong.financebridge.ui.util.adaptiveContentWidth
 import vn.phuong.financebridge.ui.util.rememberWindowWidthTier
@@ -43,6 +46,10 @@ fun DashboardScreen(
     onOpenInterest: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
     onOpenSync: () -> Unit = {},
+    onOpenReports: () -> Unit = {},
+    loanPrincipal: Long? = null,
+    hasLoans: Boolean = false,
+    isLoanError: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (isLoading && dashboardState == null) {
@@ -71,6 +78,34 @@ fun DashboardScreen(
     val windowTier = rememberWindowWidthTier()
     val isNarrow = windowTier == WindowWidthTier.NARROW_FOLD
     val horizontalPadding = if (isNarrow) 12.dp else 16.dp
+
+    // Aggregate monthly bars to derive current month numbers and 5-month trend
+    val monthlyBars = remember(data.daily) {
+        MonthlySummaryUtil.aggregate5Months(data.daily)
+    }
+    val currentMonthBar = monthlyBars.lastOrNull()
+    val currentMonthNet = currentMonthBar?.let { it.income - it.expense } ?: data.netDiff
+    val currentMonthIncome = currentMonthBar?.income ?: data.monthlyIncome
+    val currentMonthExpense = currentMonthBar?.expense ?: data.monthlyExpense
+
+    val heroNetText = if (currentMonthBar != null) {
+        FinanceFormatters.formatVnd(currentMonthNet, includeSign = true)
+    } else {
+        data.formattedNetDiff
+    }
+    val heroIncomeText = if (currentMonthBar != null) {
+        FinanceFormatters.formatVnd(currentMonthIncome)
+    } else {
+        data.formattedIncome
+    }
+    val heroExpenseText = if (currentMonthBar != null) {
+        FinanceFormatters.formatVnd(currentMonthExpense)
+    } else {
+        data.formattedExpense
+    }
+    val heroPeriodLabel = currentMonthBar?.let {
+        "Tháng ${it.yearMonth.monthValue}/${it.yearMonth.year}"
+    } ?: data.periodLabel
 
     Box(
         modifier = modifier
@@ -133,13 +168,22 @@ fun DashboardScreen(
                 }
             }
 
-            // 2. Financial Hero Card: Dòng tiền ròng trong kỳ (bo 28dp, eye toggle >=48dp, tự co font chữ)
+            // 2. Financial Hero Card: Thẻ hero phẳng, 2 ô con heroDeep Thu/Chi
             BalanceCard(
-                balanceText = data.formattedNetDiff,
-                incomeText = data.formattedIncome,
-                expenseText = data.formattedExpense,
-                periodLabel = data.periodLabel,
+                balanceText = heroNetText,
+                incomeText = heroIncomeText,
+                expenseText = heroExpenseText,
+                periodLabel = heroPeriodLabel,
             )
+
+            // 2b. Ô "Dư nợ vay" (ngay dưới hero, chỉ hiện khi có khoản vay hoặc lỗi tải sổ lãi)
+            if (hasLoans) {
+                LoanDebtCard(
+                    outstandingPrincipal = loanPrincipal,
+                    isError = isLoanError,
+                    onClick = onOpenInterest,
+                )
+            }
 
             // 3. Hai Quick Action Cards: "Ghi khoản chi" & "Ghi khoản thu" mở thẳng RecordScreen đúng trạng thái
             Row(
@@ -216,19 +260,43 @@ fun DashboardScreen(
                 }
             }
 
-            // 5. Biểu đồ xu hướng chi tiêu (nếu có dữ liệu)
+            // 5. Cảnh báo "có thể trùng" - banner tonal vàng có icon
             if (data.possibleDuplicateCount > 0) {
-                Text(
-                    text = "Có giao dịch có thể trùng giữa nguồn nhập lịch sử và ngân hàng. Cần đối soát trước khi dùng tổng số.",
-                    color = FinanceTheme.colors.expense,
-                    style = FinanceTheme.typography.caption,
-                )
-            }
-            if (data.hasReportBreakdowns) {
-                SpendingChart(daily = data.daily)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(FinanceTheme.shapes.medium)
+                        .background(FinanceTheme.colors.warning.copy(alpha = 0.12f))
+                        .border(1.dp, FinanceTheme.colors.warning.copy(alpha = 0.35f), FinanceTheme.shapes.medium)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Warning,
+                            contentDescription = "Cảnh báo trùng",
+                            tint = FinanceTheme.colors.warning,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = "Có ${data.possibleDuplicateCount} giao dịch có thể trùng giữa nguồn nhập lịch sử và ngân hàng. Cần đối soát trước khi dùng tổng số.",
+                            color = FinanceTheme.colors.textPrimary,
+                            style = FinanceTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
 
-            // 6. Giao dịch gần đây (tối đa 5 giao dịch, kết nối onTransactionClick)
+            // 6. Biểu đồ chi tiêu 5 tháng (vừa khít 344dp, nhãn không rớt dòng) kèm câu nhận xét
+            SpendingChart(
+                daily = data.daily,
+                onOpenReports = onOpenReports,
+            )
+
+            // 7. Giao dịch gần đây (đặt trong thẻ trắng, số tiền có dấu)
             FinanceCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = FinanceTheme.shapes.large,
