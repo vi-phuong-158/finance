@@ -43,6 +43,9 @@ const OWN_CONFIG = {
   BIDV: { digest: bidvDigest, label: 'BIDV ••0999' },
 };
 
+// Legacy {digest, label} shape, parsed the same way production reads the env.
+const OWN_ACCOUNTS = readOwnAccounts({ OWN_ACCOUNT_DIGESTS: JSON.stringify(OWN_CONFIG) });
+
 const envWithOwnAccounts = (overrides: Record<string, string | undefined> = {}) => testEnvironment({
   CATEGORY_MEMORY_HMAC_KEY: HMAC_SECRET,
   OWN_ACCOUNT_DIGESTS: JSON.stringify(OWN_CONFIG),
@@ -105,7 +108,7 @@ test('T1: VCB CHI toi <TK BIDV của chủ> -> Chuyển nội bộ, không vào 
     bank: [TRANSACTION_HEADERS_V2, row],
     history: [HISTORY_HEADERS],
     identities: [IDENTITY_HEADERS, ...(appState.identities ?? [])],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows[0].category, 'Chuyển nội bộ');
   assert.equal(rows[0].excludedFromReport, true);
@@ -147,7 +150,7 @@ test('T2: T1 + BIDV THU cùng số tiền trong 30 phút -> Ghép cặp; Thu = C
     identities: [IDENTITY_HEADERS, ...appState.identities],
   };
 
-  const rows = fromFinanceSnapshot(snapshot, OWN_CONFIG);
+  const rows = fromFinanceSnapshot(snapshot, OWN_ACCOUNTS);
   assert.equal(rows.length, 2);
 
   const vcbTx = rows.find((r) => r.bank === 'VCB')!;
@@ -184,7 +187,7 @@ test('T3: Chỉ có vế VCB (BIDV chưa tới) -> Vế VCB đã trung lập; kh
     bank: [TRANSACTION_HEADERS_V2, vcbRow],
     history: [HISTORY_HEADERS],
     identities: [IDENTITY_HEADERS, identityRow],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].category, 'Chuyển nội bộ');
@@ -208,7 +211,7 @@ test('T4: BIDV THU cùng số tiền nhưng không có vế nhận diện đư�
   const rows = fromFinanceSnapshot({
     bank: [TRANSACTION_HEADERS_V2, bidvRow],
     history: [HISTORY_HEADERS],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].internalTransfer, null);
@@ -244,7 +247,7 @@ test('T5: Hai BIDV THU cùng số tiền trong cửa sổ -> Không ghép (mơ h
     bank: [TRANSACTION_HEADERS_V2, vcbRow, bidvRow1, bidvRow2],
     history: [HISTORY_HEADERS],
     identities: [IDENTITY_HEADERS, identityRow],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   // Ambiguity: neither BIDV should be paired
   const b1 = rows.find((r) => r.id === `bank:${'1'.repeat(64)}`)!;
@@ -280,7 +283,7 @@ test('T6: VCB CHI 5tr cho đối tác ngoài + BIDV THU 5tr từ ngoài -> Khôn
     bank: [TRANSACTION_HEADERS_V2, vcbRow, bidvRow],
     history: [HISTORY_HEADERS],
     identities: [IDENTITY_HEADERS, identityRow],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows[0].internalTransfer, null);
   assert.equal(rows[1].internalTransfer, null);
@@ -316,7 +319,7 @@ test('T7: Người dùng sửa vế được ghép sang danh mục khác (K7 & R
     history: [HISTORY_HEADERS],
     identities: [IDENTITY_HEADERS, identityRow],
     edits: [EDIT_HEADERS, editRow],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   const bidvTx = rows.find((r) => r.id === `bank:${'b'.repeat(64)}`)!;
   const vcbTx = rows.find((r) => r.id === `bank:${'a'.repeat(64)}`)!;
@@ -361,7 +364,7 @@ test('R1 regression: VCB CHI 5tr (anchor) bị người dùng sửa sang Gia đ�
     history: [HISTORY_HEADERS],
     identities: [IDENTITY_HEADERS, identityRow],
     edits: [EDIT_HEADERS, editRow],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   const vcbTx = rows.find((r) => r.id === `bank:${'a'.repeat(64)}`)!;
   const bidvTx = rows.find((r) => r.id === `bank:${'b'.repeat(64)}`)!;
@@ -399,7 +402,7 @@ test('R3: Dòng cũ (cột K trống) và dòng mới (cột K có label) đư�
   const rows = fromFinanceSnapshot({
     bank: [TRANSACTION_HEADERS_V2, oldRow, newRow],
     history: [HISTORY_HEADERS],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows.length, 2);
   assert.equal(rows[0].accountOrWallet, 'VCB ••8999');
@@ -434,7 +437,7 @@ test('M1: 3 dòng VCB với K rỗng / "VCB" / "VCB ••8999", có cấu hình
   const rows = fromFinanceSnapshot({
     bank: [TRANSACTION_HEADERS_V2, rowEmptyK, rowBankK, rowLabelK],
     history: [HISTORY_HEADERS],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows.length, 3);
   assert.equal(rows[0].accountOrWallet, 'VCB ••8999');
@@ -494,7 +497,7 @@ test('K2: Ghép cặp qua ranh giới tháng (23:55 ngày cuối tháng ↔ 00:1
     bank: [TRANSACTION_HEADERS_V2, vcbRow, bidvRow],
     history: [HISTORY_HEADERS],
     identities: [IDENTITY_HEADERS, identityRow],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows.length, 2);
   const vcbTx = rows.find((r) => r.id === `bank:${'e'.repeat(64)}`)!;
@@ -619,7 +622,7 @@ test('K5: Tác động phụ của fromFinanceSnapshot: Sửa vế đã ghép kh
       member: '',
     })],
     identities: [IDENTITY_HEADERS, identityRow],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   const pairedVcb = rowsWithML.find((r) => r.id === `bank:${'a'.repeat(64)}`)!;
   assert.equal(pairedVcb.possibleDuplicate, false);
@@ -655,7 +658,7 @@ test('T13 (K6): Chiều ngược: BIDV CHI -> VCB THU (vế VCB THU là mỏ neo
     identities: [IDENTITY_HEADERS, ...appState.identities],
   };
 
-  const rows = fromFinanceSnapshot(snapshot, OWN_CONFIG);
+  const rows = fromFinanceSnapshot(snapshot, OWN_ACCOUNTS);
   assert.equal(rows.length, 2);
 
   const bidvTx = rows.find((r) => r.bank === 'BIDV')!;
@@ -694,7 +697,7 @@ test('T14 (K6): Cả hai vế không có mẫu CT tu ... toi ... (memo tự do) 
   const rows = fromFinanceSnapshot({
     bank: [TRANSACTION_HEADERS_V2, vcbRow, bidvRow],
     history: [HISTORY_HEADERS],
-  }, OWN_CONFIG);
+  }, OWN_ACCOUNTS);
 
   assert.equal(rows.length, 2);
   const vcbTx = rows.find((r) => r.id === `bank:${'c'.repeat(64)}`)!;
