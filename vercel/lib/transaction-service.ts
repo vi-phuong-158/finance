@@ -178,7 +178,7 @@ async function validateAndProcessTransactionInternal(
       if (account) {
         const counterpartyDigest = account.key.slice('ACCOUNT:'.length);
         const isInternalTransfer = Object.entries(ownAccounts).some(
-          ([ownBank, config]) => ownBank !== bank && config?.digest === counterpartyDigest
+          ([ownBank, config]) => ownBank !== bank && config?.digests.includes(counterpartyDigest)
         );
         if (isInternalTransfer) {
           category = 'Chuyển nội bộ';

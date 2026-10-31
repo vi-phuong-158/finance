@@ -34,7 +34,7 @@ export async function handleCategoryMemoryRequest(request: MemoryRequest, env: E
       const port = await makePort(readGoogleConfiguration(env)!, false);
       const [snapshot, rows] = await Promise.all([port.readFinance(), port.readCommands()]);
       const ownAccounts = readOwnAccounts(env);
-      const ownDigests = new Set(Object.values(ownAccounts).map((a) => a.digest));
+      const ownDigests = new Set(Object.values(ownAccounts).flatMap((a) => a.digests));
       const rules = buildMemoryIndex(memoryObservations(snapshot), readMemoryCommands(rows), ownDigests);
       return { httpStatus: 200, body: { version: 1, enabled: true, writesEnabled: writesEnabled && rows !== null,
         generatedAt: now.toISOString(), window: MEMORY_WINDOW, rules,

@@ -33,9 +33,12 @@ export function validWebhookUrl(value: string): boolean {
   } catch { return false; }
 }
 
-export type OwnAccount = { digest: string; label: string };
+export type OwnAccount = { digests: string[]; label: string };
 export type OwnAccounts = Partial<Record<'VCB' | 'BIDV' | 'VIETINBANK', OwnAccount>>;
 
+const MAX_DIGESTS_PER_BANK = 8;
+
+// Accepts the legacy {digest, label} and the newer {digests: [...], label} shapes; a bank may own several accounts.
 export function readOwnAccounts(env: Environment): OwnAccounts {
   const raw = env.OWN_ACCOUNT_DIGESTS;
   if (!raw || typeof raw !== 'string') return {};
@@ -46,11 +49,12 @@ export function readOwnAccounts(env: Environment): OwnAccounts {
     for (const [bank, config] of Object.entries(parsed)) {
       if (!['VCB', 'BIDV', 'VIETINBANK'].includes(bank)) continue;
       if (!config || typeof config !== 'object') continue;
-      const { digest, label } = config as Record<string, unknown>;
-      if (typeof digest === 'string' && /^[a-f0-9]{32}$/.test(digest)
-        && typeof label === 'string' && label.trim().length > 0 && label.length <= 120 && !/[\t\r\n|]/.test(label)) {
-        result[bank as 'VCB' | 'BIDV' | 'VIETINBANK'] = { digest, label: label.trim() };
-      }
+      const { digest, digests, label } = config as Record<string, unknown>;
+      if (typeof label !== 'string' || label.trim().length === 0 || label.length > 120 || /[\t\r\n|]/.test(label)) continue;
+      const candidates = [digest, ...(Array.isArray(digests) ? digests : [])];
+      const valid = [...new Set(candidates.filter((d): d is string => typeof d === 'string' && /^[a-f0-9]{32}$/.test(d)))]
+        .slice(0, MAX_DIGESTS_PER_BANK);
+      if (valid.length > 0) result[bank as 'VCB' | 'BIDV' | 'VIETINBANK'] = { digests: valid, label: label.trim() };
     }
     return result;
   } catch {

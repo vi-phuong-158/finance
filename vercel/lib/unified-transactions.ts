@@ -93,7 +93,7 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot, ownAccounts: OwnA
     if (!iden || !iden.key.startsWith('ACCOUNT:')) continue;
     const digest = iden.key.slice('ACCOUNT:'.length);
     for (const [ownBank, config] of Object.entries(ownAccounts)) {
-      if (ownBank !== t.bank && config?.digest === digest) {
+      if (ownBank !== t.bank && config?.digests.includes(digest)) {
         anchors.push({ tx: t, targetBank: ownBank });
         break;
       }
