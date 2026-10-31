@@ -168,7 +168,7 @@ async function validateAndProcessTransactionInternal(
     if (parsed) {
       const ownAccounts = readOwnAccounts(env);
       const bankConfig = ownAccounts[bank];
-      const accountLabel = bankConfig?.label ?? bank;
+      const accountLabel = bankConfig?.label ?? '';
 
       let category = matchCategory(`${parsed.counterparty} ${parsed.description}`, parsed.type);
       // Only here is the counterparty account still unmasked; only its keyed HMAC leaves this function.

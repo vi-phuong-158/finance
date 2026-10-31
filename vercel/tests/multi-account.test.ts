@@ -414,6 +414,68 @@ test('R3: Dòng cũ (cột K trống) và dòng mới (cột K có label) đư�
   assert.equal(accountGroups[0].expense, 300_000);
 });
 
+test('M1: 3 dòng VCB với K rỗng / "VCB" / "VCB ••8999", có cấu hình nhãn "VCB ••8999" -> dashboard.accountSummary chỉ có 1 nhóm VCB, 3 giao dịch', () => {
+  const rowEmptyK = [
+    '29/10/2026 09:00', 'VCB', 'CHI', 100_000, 9_900_000,
+    'Cửa hàng', 'Mua cafe', 'Ăn uống',
+    '1'.repeat(64), 'BANK_NOTIFICATION', '', // Empty Column K
+  ];
+  const rowBankK = [
+    '29/10/2026 09:30', 'VCB', 'CHI', 150_000, 9_750_000,
+    'Cửa hàng', 'Mua bánh', 'Ăn uống',
+    '2'.repeat(64), 'BANK_NOTIFICATION', 'VCB', // K equals bank code
+  ];
+  const rowLabelK = [
+    '29/10/2026 10:00', 'VCB', 'CHI', 200_000, 9_550_000,
+    'Cửa hàng', 'Mua cơm', 'Ăn uống',
+    '3'.repeat(64), 'BANK_NOTIFICATION', 'VCB ••8999', // Populated Column K
+  ];
+
+  const rows = fromFinanceSnapshot({
+    bank: [TRANSACTION_HEADERS_V2, rowEmptyK, rowBankK, rowLabelK],
+    history: [HISTORY_HEADERS],
+  }, OWN_CONFIG);
+
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].accountOrWallet, 'VCB ••8999');
+  assert.equal(rows[1].accountOrWallet, 'VCB ••8999');
+  assert.equal(rows[2].accountOrWallet, 'VCB ••8999');
+
+  const query = parseFinanceQuery({ from: '2026-10-01', to: '2026-10-31' }, true);
+  const dashboard = buildDashboard(rows, query);
+  const accountGroups = dashboard.accountSummary;
+  assert.equal(accountGroups.length, 1);
+  assert.equal(accountGroups[0].name, 'VCB ••8999');
+  assert.equal(accountGroups[0].transactionCount, 3);
+  assert.equal(accountGroups[0].expense, 450_000);
+});
+
+test('M1: Ghi thông báo ngân hàng khi chưa có cấu hình OWN_ACCOUNT_DIGESTS -> hàng ghi ra có K = "" và J = "BANK_NOTIFICATION"', async () => {
+  const postedAt = 1793268000000;
+  const vcbText = `Số dư TK VCB ${VCB_ACCT} -50,000 VND lúc 29-10-2026 10:00:00. Số dư 10,000,000 VND. Ref MBVCB.TEST.NORMAL`;
+  const eventId = createEventId('VCB', postedAt, vcbText);
+  const appState = { transactions: [] as unknown[][], raw: [] as unknown[][] };
+  const port = mockSheetsPort(appState);
+
+  const res = await validateAndProcessTransaction(
+    {
+      method: 'POST',
+      headers: { 'x-webhook-secret': SYNTHETIC_SECRET, 'content-type': 'application/json' },
+      body: { eventId, text: vcbText, postedAt, bank: 'VCB', packageName: 'com.VCB', title: 'VCB' },
+    },
+    testEnvironment(),
+    port
+  );
+
+  assert.equal(res.httpStatus, 200);
+  assert.equal(res.body.status, 'SAVED_TRANSACTION');
+  assert.equal(appState.transactions.length, 1);
+  const row = appState.transactions[0];
+  assert.equal(row[8], eventId);
+  assert.equal(row[9], 'BANK_NOTIFICATION');
+  assert.equal(row[10], '');
+});
+
 test('K2: Ghép cặp qua ranh giới tháng (23:55 ngày cuối tháng ↔ 00:10 ngày đầu tháng sau) và giữ internalTransfer khi phân trang', () => {
   const vcbRow = [
     '31/10/2026 23:55', 'VCB', 'CHI', 5_000_000, 10_000_000,

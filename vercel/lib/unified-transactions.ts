@@ -55,7 +55,9 @@ export function fromFinanceSnapshot(snapshot: FinanceSnapshot, ownAccounts: OwnA
     const date = `${match[3]}-${match[2]}-${match[1]}`, time = `${match[4]}:${match[5]}`;
     if (!validDate(date) || Number(match[4]) > 23 || Number(match[5]) > 59) throw new Error('INVALID_FINANCE_ROW');
     const canonical = canonicalBankCategory(text(category));
-    const bankAccount = text(account).trim() || ownAccounts[bank as Bank]?.label || text(bank);
+    const rawAccount = text(account).trim();
+    const effectiveAccount = rawAccount === text(bank) ? '' : rawAccount;
+    const bankAccount = effectiveAccount || ownAccounts[bank as Bank]?.label || text(bank);
     rows.push({ id: `${manual ? 'manual' : 'bank'}:${id}`, date, time: `${date}T${time}:00+07:00`, datePrecision: 'MINUTE', type,
       amount, currency: 'VND', category: canonical, originalCategory: text(category),
       accountOrWallet: manual ? text(account) : bankAccount, bank: bank === 'CASH' ? null : bank as Bank, counterparty: text(party) || null,
