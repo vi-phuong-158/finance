@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,7 +35,7 @@ enum class NavigationTab(val label: String, val icon: ImageVector) {
     TRANSACTIONS("Giao dịch", Icons.AutoMirrored.Rounded.ReceiptLong),
     RECORD("+", Icons.Rounded.Add),
     REPORTS("Báo cáo", Icons.Rounded.PieChart),
-    MORE("Cá nhân", Icons.Rounded.Person), // Renamed from "Khác" to "Cá nhân" per UI V2 spec
+    MORE("Cá nhân", Icons.Rounded.Person),
     ACCOUNTS("Tài khoản", Icons.Rounded.AccountBalanceWallet), // internal route
 }
 
@@ -48,7 +49,7 @@ fun FinanceBottomBar(
     val windowTier = rememberWindowWidthTier()
     val isNarrow = windowTier == WindowWidthTier.NARROW_FOLD
 
-    // 5 primary navigation tabs as specified in UI V2 Phase F
+    // 5 primary navigation tabs as specified in UI V2 Phase F & PROMPT 12
     val visibleTabs = listOf(
         NavigationTab.DASHBOARD,
         NavigationTab.TRANSACTIONS,
@@ -62,7 +63,7 @@ fun FinanceBottomBar(
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(
-                horizontal = if (isNarrow) 10.dp else 16.dp,
+                horizontal = if (isNarrow) 8.dp else 16.dp,
                 vertical = 8.dp,
             ),
         contentAlignment = Alignment.Center,
@@ -71,7 +72,7 @@ fun FinanceBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .adaptiveNavWidth()
-                .heightIn(min = 68.dp)
+                .heightIn(min = 66.dp)
                 .shadow(
                     elevation = FinanceTheme.spacing.elevationFloating,
                     shape = barShape,
@@ -81,7 +82,7 @@ fun FinanceBottomBar(
                 .clip(barShape)
                 .background(FinanceTheme.colors.surfaceGlass)
                 .border(1.dp, FinanceTheme.colors.borderGlass, barShape)
-                .padding(horizontal = if (isNarrow) 4.dp else 8.dp, vertical = 6.dp),
+                .padding(horizontal = if (isNarrow) 4.dp else 8.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -113,47 +114,56 @@ private fun NavigationTabItem(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val activeColor = FinanceTheme.colors.primary
-    val inactiveColor = FinanceTheme.colors.textMuted
+    val fontScale = LocalDensity.current.fontScale
+    // At 344dp, if font is enlarged (>1.15x), prioritize label for selected tab to prevent line-wrapping
+    val showLabel = isSelected || !isNarrow || fontScale <= 1.15f
 
-    Column(
+    val activeBg = FinanceTheme.colors.primary
+    val activeContentColor = FinanceTheme.colors.onPrimary
+    val inactiveContentColor = FinanceTheme.colors.textSecondary
+
+    Box(
         modifier = modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 52.dp)
             .clip(FinanceTheme.shapes.medium)
-            .clickable(onClick = onSelect)
-            .padding(horizontal = 2.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .clickable(onClick = onSelect),
+        contentAlignment = Alignment.Center,
     ) {
-        // Mint pill indicator for active tab
+        // Active tab has a solid primary pill enclosing icon and label with onPrimary (white) text
         Box(
             modifier = Modifier
-                .height(30.dp)
-                .defaultMinSize(minWidth = if (isSelected) 44.dp else 30.dp)
+                .fillMaxWidth()
                 .clip(FinanceTheme.shapes.pill)
-                .background(if (isSelected) FinanceTheme.colors.primaryContainer else Color.Transparent)
-                .padding(horizontal = if (isSelected) 10.dp else 4.dp),
+                .background(if (isSelected) activeBg else Color.Transparent)
+                .padding(horizontal = if (isNarrow) 4.dp else 6.dp, vertical = if (isSelected) 5.dp else 4.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = tab.icon,
-                contentDescription = tab.label,
-                modifier = Modifier.size(20.dp),
-                tint = if (isSelected) activeColor else inactiveColor,
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    imageVector = tab.icon,
+                    contentDescription = tab.label,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (isSelected) activeContentColor else inactiveContentColor,
+                )
+                if (showLabel) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = tab.label,
+                        style = FinanceTheme.typography.caption.copy(
+                            fontSize = if (isNarrow) 10.sp else 11.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        ),
+                        color = if (isSelected) activeContentColor else inactiveContentColor,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = tab.label,
-            style = FinanceTheme.typography.caption.copy(
-                fontSize = if (isNarrow) 10.sp else 11.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-            ),
-            color = if (isSelected) activeColor else inactiveColor,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
