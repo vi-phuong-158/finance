@@ -291,7 +291,7 @@ fun DashboardScreen(
             }
 
             // 6. Biểu đồ chi tiêu 5 tháng (vừa khít 344dp, nhãn không rớt dòng) kèm câu nhận xét
-            SpendingChart(
+            FiveMonthSpendingChart(
                 daily = data.daily,
                 onOpenReports = onOpenReports,
             )
