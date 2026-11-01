@@ -109,6 +109,43 @@ object ReportPeriodHelper {
     }
 
     /**
+     * Shared monthly aggregation engine used by both Home (MonthlySummaryUtil.aggregate5Months)
+     * and Reports/CategoryHistory (aggregateDailyToMonthly).
+     * Groups dailySummary by "YYYY-MM" and fills missing calendar months in fromMonth..toMonth with 0.
+     */
+    fun aggregateMonthlyMetrics(
+        daily: List<UiPeriodMetric>,
+        fromMonth: YearMonth,
+        toMonth: YearMonth,
+        currentMonthRef: YearMonth = YearMonth.now(VIETNAM_ZONE_ID),
+    ): List<MonthlyBarData> {
+        if (toMonth.isBefore(fromMonth)) return emptyList()
+
+        val dailyByMonth = daily.groupBy { metric ->
+            if (metric.name.length >= 7) metric.name.substring(0, 7) else ""
+        }
+
+        val result = mutableListOf<MonthlyBarData>()
+        var ym = fromMonth
+        while (!ym.isAfter(toMonth)) {
+            val key = ym.toString() // "YYYY-MM"
+            val matching = dailyByMonth[key] ?: emptyList()
+            result.add(
+                MonthlyBarData(
+                    yearMonth = ym,
+                    monthLabel = "T${ym.monthValue}",
+                    expense = matching.sumOf { it.expense },
+                    income = matching.sumOf { it.income },
+                    isCurrentMonth = (ym == currentMonthRef),
+                    transactionCount = matching.sumOf { it.count },
+                )
+            )
+            ym = ym.plusMonths(1)
+        }
+        return result
+    }
+
+    /**
      * Aggregates dailySummary into calendar months for a date range:
      * - Fills missing months with 0 amount and 0 count.
      * - Supports crossing year boundaries (e.g. Nov 2025 -> Apr 2026).
@@ -126,39 +163,20 @@ object ReportPeriodHelper {
         val toMonth = YearMonth.from(to)
         val spansMultipleYears = fromMonth.year != toMonth.year
 
-        // Index daily items by date prefix "YYYY-MM"
-        val dailyByMonth = daily.groupBy { metric ->
-            if (metric.name.length >= 7) metric.name.substring(0, 7) else ""
-        }
-
-        val bars = mutableListOf<ReportChartBar>()
-        var currentMonth = fromMonth
-
-        while (!currentMonth.isAfter(toMonth)) {
-            val key = String.format("%04d-%02d", currentMonth.year, currentMonth.monthValue)
+        return aggregateMonthlyMetrics(daily, fromMonth, toMonth).map { bar ->
+            val ym = bar.yearMonth
             val label = if (spansMultipleYears) {
-                "T${currentMonth.monthValue}/${currentMonth.year % 100}"
+                "T${ym.monthValue}/${ym.year % 100}"
             } else {
-                "T${currentMonth.monthValue}"
+                bar.monthLabel
             }
-
-            val matchingItems = dailyByMonth[key] ?: emptyList()
-            val totalAmount = matchingItems.sumOf { if (isIncome) it.income else it.expense }
-            val totalCount = matchingItems.sumOf { it.count }
-
-            bars.add(
-                ReportChartBar(
-                    key = key,
-                    label = label,
-                    amount = totalAmount,
-                    count = totalCount,
-                )
+            ReportChartBar(
+                key = ym.toString(),
+                label = label,
+                amount = if (isIncome) bar.income else bar.expense,
+                count = bar.transactionCount,
             )
-
-            currentMonth = currentMonth.plusMonths(1)
         }
-
-        return bars
     }
 
     /**
