@@ -89,10 +89,11 @@ class ReportCacheTest {
                 source = "BANK_NOTIFICATION",
             )
         )
-        ReportCache.putTransactions(key, list)
+        ReportCache.putTransactions(key, list, "cursor_page_2")
 
         val cached = ReportCache.getTransactions(key)
         assertEquals(1, cached?.size)
         assertEquals("tx1", cached?.first()?.id)
+        assertEquals("cursor_page_2", ReportCache.getNextCursor(key))
     }
 }

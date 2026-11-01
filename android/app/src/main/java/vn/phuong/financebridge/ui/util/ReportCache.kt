@@ -13,6 +13,7 @@ import vn.phuong.financebridge.ui.model.UiTransaction
 object ReportCache {
     private val dashboardCache = mutableMapOf<String, UiDashboard>()
     private val transactionsCache = mutableMapOf<String, List<UiTransaction>>()
+    private val nextCursorCache = mutableMapOf<String, String?>()
 
     fun normalizeQueryKey(endpoint: String, query: Map<String, String>): String {
         val sortedQuery = query.entries.sortedBy { it.key }
@@ -28,17 +29,23 @@ object ReportCache {
         dashboardCache[key] = data
     }
 
-    fun getTransactions(key: String): List<UiTransaction>? = synchronized(transactionsCache) {
+    fun getTransactions(key: String): List<UiTransaction>? = synchronized(dashboardCache) {
         transactionsCache[key]
     }
 
-    fun putTransactions(key: String, data: List<UiTransaction>) = synchronized(transactionsCache) {
+    fun getNextCursor(key: String): String? = synchronized(dashboardCache) {
+        nextCursorCache[key]
+    }
+
+    fun putTransactions(key: String, data: List<UiTransaction>, nextCursor: String? = null) = synchronized(dashboardCache) {
         transactionsCache[key] = data
+        nextCursorCache[key] = nextCursor
     }
 
     fun clear() = synchronized(dashboardCache) {
         dashboardCache.clear()
         transactionsCache.clear()
+        nextCursorCache.clear()
     }
 
     fun size(): Int = synchronized(dashboardCache) {

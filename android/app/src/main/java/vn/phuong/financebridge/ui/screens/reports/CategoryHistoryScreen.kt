@@ -118,14 +118,26 @@ fun CategoryHistoryScreen(
             "from" to fromDate,
             "to" to toDate
         )
+        val (prevFrom, prevTo) = ReportPeriodHelper.calculatePreviousPeriod(resolvedFrom, resolvedTo)
+        val prevQueryMap = mapOf(
+            "category" to category,
+            "type" to typeStr,
+            "from" to prevFrom.toString(),
+            "to" to prevTo.toString()
+        )
         val cacheKey = ReportCache.normalizeQueryKey("category-history", queryMap)
+        val prevCacheKey = ReportCache.normalizeQueryKey("category-history-prev", prevQueryMap)
 
         val cachedDashboard = ReportCache.getDashboard(cacheKey)
+        val cachedPrevDashboard = ReportCache.getDashboard(prevCacheKey)
         val cachedTransactions = ReportCache.getTransactions(cacheKey)
+        val cachedNextCursor = ReportCache.getNextCursor(cacheKey)
 
         if (!isRefresh && cachedDashboard != null && cachedTransactions != null) {
             dashboardData = cachedDashboard
+            prevDashboardData = cachedPrevDashboard
             transactions = cachedTransactions
+            nextCursor = cachedNextCursor
             loading = false
         } else {
             loading = true
@@ -142,15 +154,9 @@ fun CategoryHistoryScreen(
                 }
 
                 // 2. Fetch previous period dashboard for comparison
-                val (prevFrom, prevTo) = ReportPeriodHelper.calculatePreviousPeriod(resolvedFrom, resolvedTo)
-                val prevQueryMap = mapOf(
-                    "category" to category,
-                    "type" to typeStr,
-                    "from" to prevFrom.toString(),
-                    "to" to prevTo.toString()
-                )
                 repository.fetchDashboard(prevQueryMap).onSuccess { prevDash ->
                     prevDashboardData = prevDash
+                    ReportCache.putDashboard(prevCacheKey, prevDash)
                 }
 
                 // 3. Fetch transactions list for this category
@@ -162,7 +168,7 @@ fun CategoryHistoryScreen(
                 }.onSuccess { (list, cursor) ->
                     transactions = list
                     nextCursor = cursor
-                    ReportCache.putTransactions(cacheKey, list)
+                    ReportCache.putTransactions(cacheKey, list, cursor)
                 }.onFailure {
                     if (dashboardData == null) error = "Không tải được danh sách giao dịch."
                 }
@@ -213,15 +219,7 @@ fun CategoryHistoryScreen(
             transactions
         } else {
             transactions.filter { tx ->
-                if (selectedBarKey!!.length == 7) {
-                    // Monthly filter e.g. "2026-10"
-                    val txIso = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US).format(java.util.Date(tx.timestamp))
-                    txIso == selectedBarKey
-                } else {
-                    // Daily filter e.g. "2026-10-15"
-                    val txIso = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(tx.timestamp))
-                    txIso == selectedBarKey
-                }
+                ReportPeriodHelper.matchesBarFilter(tx.timestamp, selectedBarKey!!)
             }
         }
     }
@@ -660,12 +658,35 @@ fun CategoryHistoryScreen(
                         }
 
                         items(dayTransactions, key = { it.id }) { tx ->
+                            val isNotCounted = tx.excluded || tx.category == "Chuyển nội bộ"
                             FinanceCard(contentPadding = 8.dp) {
-                                TransactionRow(
-                                    transaction = tx,
-                                    smartStatus = null,
-                                    onClick = { selectedTransaction = tx }
-                                )
+                                Column {
+                                    TransactionRow(
+                                        transaction = tx,
+                                        smartStatus = null,
+                                        onClick = { selectedTransaction = tx }
+                                    )
+                                    if (isNotCounted) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 62.dp, bottom = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                shape = FinanceTheme.shapes.pill,
+                                                color = FinanceTheme.colors.textMuted.copy(alpha = 0.14f)
+                                            ) {
+                                                Text(
+                                                    text = "Không tính",
+                                                    style = FinanceTheme.typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                                                    color = FinanceTheme.colors.textSecondary,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

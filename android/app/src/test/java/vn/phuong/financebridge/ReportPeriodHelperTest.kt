@@ -176,4 +176,18 @@ class ReportPeriodHelperTest {
         assertEquals("Không đổi so với giai đoạn trước", compEqual.formattedSummary)
         assertEquals(0, compEqual.percentChange)
     }
+
+    @Test
+    fun testMatchesBarFilterUsesVietnamTimeZone() {
+        // 2026-10-01 00:30:00 in Asia/Ho_Chi_Minh (+07:00) is 2026-09-30 17:30:00 UTC
+        val timestampVnEarlyMorning = java.time.ZonedDateTime.of(
+            2026, 10, 1, 0, 30, 0, 0,
+            java.time.ZoneId.of("Asia/Ho_Chi_Minh")
+        ).toInstant().toEpochMilli()
+
+        assertTrue(ReportPeriodHelper.matchesBarFilter(timestampVnEarlyMorning, "2026-10"))
+        assertTrue(ReportPeriodHelper.matchesBarFilter(timestampVnEarlyMorning, "2026-10-01"))
+        assertFalse(ReportPeriodHelper.matchesBarFilter(timestampVnEarlyMorning, "2026-09"))
+        assertFalse(ReportPeriodHelper.matchesBarFilter(timestampVnEarlyMorning, "2026-09-30"))
+    }
 }

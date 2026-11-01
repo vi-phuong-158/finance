@@ -239,4 +239,17 @@ object ReportPeriodHelper {
             formattedSummary = summary,
         )
     }
+
+    /**
+     * Checks whether a transaction timestamp (epoch millis) falls into [selectedBarKey]
+     * ("YYYY-MM" for monthly bars or "YYYY-MM-DD" for daily bars) in the Vietnam timezone.
+     */
+    fun matchesBarFilter(timestampMillis: Long, selectedBarKey: String): Boolean {
+        val date = java.time.Instant.ofEpochMilli(timestampMillis).atZone(VIETNAM_ZONE_ID).toLocalDate()
+        return if (selectedBarKey.length == 7) {
+            YearMonth.from(date).toString() == selectedBarKey
+        } else {
+            date.toString() == selectedBarKey
+        }
+    }
 }
