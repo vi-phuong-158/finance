@@ -12,10 +12,11 @@ data class MonthlyBarData(
     val expense: Long,
     val income: Long = 0L,
     val isCurrentMonth: Boolean = false,
+    val transactionCount: Int = 0,
 )
 
 object MonthlySummaryUtil {
-    val VIETNAM_ZONE_ID: ZoneId = ZoneId.of("Asia/Ho_Chi_Minh")
+    val VIETNAM_ZONE_ID: ZoneId = vn.phuong.financebridge.ui.util.VIETNAM_ZONE_ID
 
     /**
      * Computes the 5-month query date range (from 4 months ago to end of current month)
@@ -42,7 +43,8 @@ object MonthlySummaryUtil {
     }
 
     /**
-     * Aggregates daily metrics from dailySummary into 5 consecutive monthly bars.
+     * Aggregates daily metrics from dailySummary into 5 consecutive monthly bars
+     * by delegating to the shared ReportPeriodHelper.aggregateMonthlyMetrics engine.
      * Empty months are filled with 0. Seamlessly spans across year boundaries.
      */
     fun aggregate5Months(
@@ -51,24 +53,12 @@ object MonthlySummaryUtil {
     ): List<MonthlyBarData> {
         val currentYm = YearMonth.from(today)
         val startYm = currentYm.minusMonths(4)
-
-        // Generate 5 consecutive months
-        val months = (0L..4L).map { offset -> startYm.plusMonths(offset) }
-
-        return months.map { ym ->
-            val prefix = ym.toString() // "yyyy-MM"
-            val matching = daily.filter { it.name.startsWith(prefix) }
-            val totalExpense = matching.sumOf { it.expense }
-            val totalIncome = matching.sumOf { it.income }
-            val label = "T${ym.monthValue}"
-            MonthlyBarData(
-                yearMonth = ym,
-                monthLabel = label,
-                expense = totalExpense,
-                income = totalIncome,
-                isCurrentMonth = (ym == currentYm),
-            )
-        }
+        return ReportPeriodHelper.aggregateMonthlyMetrics(
+            daily = daily,
+            fromMonth = startYm,
+            toMonth = currentYm,
+            currentMonthRef = currentYm,
+        )
     }
 
     /**
