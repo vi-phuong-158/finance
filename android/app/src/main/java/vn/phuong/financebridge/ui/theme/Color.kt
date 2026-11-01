@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// Vigil Green fintech palette (UI V2 Phase F).
+// Vigil Green fintech palette (UI V2 Phase F & PROMPT 12).
 // Primary #078553 (Primary Strong) ensures WCAG AA contrast ratio (>4.5:1) for buttons, tabs, text on green.
 // Accent #00A86B is reserved for decorations, gradients and bold headline text.
 val Primary50 = Color(0xFFEFFAF5)   // Mint Light
@@ -24,16 +24,17 @@ val HeroEnd = Color(0xFF00A86B)
 val AccentMint = Color(0xFFDDF7EC)
 
 // Neutral & surfaces (Light)
-val BackgroundLight = Color(0xFFF5F7F6)
+// Mint-tinted background per PROMPT 12 (#EEF5F1) with crisp text reaching WCAG AA (>4.5:1)
+val BackgroundLight = Color(0xFFEEF5F1)
 val SurfaceLight = Color(0xFFFFFFFF)
 val SurfaceCardLight = Color(0xFFFFFFFF)
 // Floating navigation background (white alpha ~0.94, no blur required)
 val SurfaceGlassLight = Color(0xF0FFFFFF)
-val BorderGlassLight = Color(0xFFE6EBE8)
+val BorderGlassLight = Color(0xFFE2EBE5)
 
 val TextPrimaryLight = Color(0xFF161B18)
-val TextSecondaryLight = Color(0xFF66716B)
-val TextMutedLight = Color(0xFF909A95)
+val TextSecondaryLight = Color(0xFF52605A) // Tuned for >= 4.5:1 WCAG AA compliance on #EEF5F1
+val TextMutedLight = Color(0xFF75827C)
 
 // Semantic colors
 val IncomeGreen = Color(0xFF078553)
@@ -98,6 +99,9 @@ data class FinanceColors(
     val info: Color,
     val heroStart: Color,
     val heroEnd: Color,
+    val heroDeep: Color,
+    val onHero: Color,
+    val onHeroMuted: Color,
     val shadowAmbient: Color,
     val shadowSpot: Color,
     val isDark: Boolean,
@@ -124,6 +128,9 @@ val LocalFinanceColors = staticCompositionLocalOf {
         info = InfoBlue,
         heroStart = HeroStart,
         heroEnd = HeroEnd,
+        heroDeep = Primary700,
+        onHero = Color.White,
+        onHeroMuted = Color(0xD9FFFFFF),
         shadowAmbient = ShadowAmbientLight,
         shadowSpot = ShadowSpotLight,
         isDark = false,
